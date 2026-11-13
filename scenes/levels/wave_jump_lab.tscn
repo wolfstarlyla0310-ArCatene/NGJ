@@ -1,17 +1,13 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/wave_jump_lab.gd" id="1_lab"]
 [ext_resource type="PackedScene" path="res://scenes/actors/wall_platform.tscn" id="2_wall"]
 [ext_resource type="PackedScene" path="res://scenes/actors/player.tscn" id="3_player"]
-[ext_resource type="PackedScene" path="res://scenes/actors/eye.tscn" id="4_eye"]
-[ext_resource type="Script" path="res://scripts/hud.gd" id="5_hud"]
-
-[sub_resource type="SystemFont" id="SystemFont_cn"]
-font_names = PackedStringArray("Microsoft YaHei", "sans-serif")
-
-[sub_resource type="Theme" id="Theme_signs"]
-default_font = SubResource("SystemFont_cn")
-default_font_size = 15
+[ext_resource type="Script" path="res://scripts/breakables.gd" id="4_breakables"]
+[ext_resource type="TileSet" path="res://resources/lv1_tileset.tres" id="5_lv1"]
+[ext_resource type="TileSet" path="res://resources/lv2_tileset.tres" id="6_lv2"]
+[ext_resource type="Script" path="res://scripts/noise_field.gd" id="7_noise"]
+[ext_resource type="TileSet" path="res://resources/noise_tileset.tres" id="8_noise_tiles"]
 
 [node name="WaveJumpLab" type="Node2D"]
 script = ExtResource("1_lab")
@@ -43,81 +39,29 @@ position = Vector2(800, 288)
 tiles_wide = 9
 tiles_high = 2
 
+[node name="Breakables" type="Node2D" parent="."]
+z_index = 1
+script = ExtResource("4_breakables")
+
+[node name="Lv1" type="TileMapLayer" parent="Breakables"]
+tile_set = ExtResource("5_lv1")
+collision_enabled = false
+
+[node name="Lv2" type="TileMapLayer" parent="Breakables"]
+tile_set = ExtResource("6_lv2")
+collision_enabled = false
+
+[node name="Noise" type="TileMapLayer" parent="."]
+z_index = 2
+tile_set = ExtResource("8_noise_tiles")
+collision_enabled = false
+script = ExtResource("7_noise")
+
 [node name="Player" parent="." instance=ExtResource("3_player")]
 position = Vector2(320, 522)
-show_body_in_eye = true
-direct_jump_enabled = false
-collision_rebound_enabled = true
-
-[node name="Eye" parent="." instance=ExtResource("4_eye")]
-position = Vector2(320, 576)
-dark_marker = true
-free_cursor = true
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(640, 380)
 
 [node name="Pulses" type="Node2D" parent="."]
 z_index = 7
-
-[node name="Signs" type="Node2D" parent="."]
-
-[node name="StartTip" type="Label" parent="Signs"]
-offset_left = 208.0
-offset_top = 300.0
-theme = SubResource("Theme_signs")
-text = "01 / 点击脚下同列墙格"
-
-[node name="LowTip" type="Label" parent="Signs"]
-offset_left = 554.0
-offset_top = 374.0
-theme = SubResource("Theme_signs")
-text = "02 / 配合横移，跳上台阶"
-
-[node name="HighTip" type="Label" parent="Signs"]
-offset_left = 816.0
-offset_top = 246.0
-theme = SubResource("Theme_signs")
-text = "03 / 再用声波跳上高台"
-
-[node name="DropRuler" type="Line2D" parent="."]
-points = PackedVector2Array(1192, 288, 1192, 544)
-width = 1.0
-default_color = Color(0.35, 0.35, 0.35, 1)
-
-[node name="TwoTilesTick" type="Line2D" parent="DropRuler"]
-points = PackedVector2Array(1184, 480, 1200, 480)
-width = 1.0
-default_color = Color(0.7, 0.7, 0.7, 1)
-
-[node name="FourTilesTick" type="Line2D" parent="DropRuler"]
-points = PackedVector2Array(1184, 416, 1200, 416)
-width = 1.0
-default_color = Color(0.7, 0.7, 0.7, 1)
-
-[node name="EightTilesTick" type="Line2D" parent="DropRuler"]
-points = PackedVector2Array(1184, 288, 1200, 288)
-width = 1.0
-default_color = Color(0.7, 0.7, 0.7, 1)
-
-[node name="TwoTilesLabel" type="Label" parent="Signs"]
-offset_left = 1206.0
-offset_top = 468.0
-theme = SubResource("Theme_signs")
-text = "2 格"
-
-[node name="FourTilesLabel" type="Label" parent="Signs"]
-offset_left = 1206.0
-offset_top = 404.0
-theme = SubResource("Theme_signs")
-text = "4 格"
-
-[node name="EightTilesLabel" type="Label" parent="Signs"]
-offset_left = 1206.0
-offset_top = 276.0
-theme = SubResource("Theme_signs")
-text = "8 格"
-
-[node name="HUD" type="CanvasLayer" parent="."]
-layer = 10
-script = ExtResource("5_hud")

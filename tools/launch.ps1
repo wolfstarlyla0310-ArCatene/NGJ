@@ -23,9 +23,7 @@ if (-not $enginePath) {
     exit 1
 }
 if ($Check) {
-    & $enginePath --headless --path $projectFolder --script res://tests/grid_rebound_checks.gd
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    & $enginePath --headless --path $projectFolder --script res://tests/wave_jump_checks.gd
+    & $enginePath --headless --path $projectFolder --script res://tests/keyboard_movement_checks.gd
     exit $LASTEXITCODE
 }
 $launchArguments = @('--path', ('"' + $projectFolder + '"'))

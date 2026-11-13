@@ -1,141 +1,111 @@
 class_name EchoPlayer
 extends CharacterBody2D
 
-signal sound_emitted(origin: Vector2, strength: float)
-signal impulse_received(impulse: Vector2, source: String)
-signal wall_impact(origin: Vector2, normal: Vector2, strength: float)
-signal rebound_resolved(drop_pixels: float, tier: int, rebound_pixels: float)
+signal wave_emitted(origin: Vector2, side_pixels: float, level: int, kind: String)
+
+const TILE_SIZE: float = 32.0
+const CONTACT_TOLERANCE_PIXELS: float = 0.5
+const WAVE_SIDE_TILES := [3, 5, 7]  # lv0, lv1, lv2
 
 @export var speed: float = 250.0
 @export var acceleration: float = 1800.0
-@export var jump_velocity: float = -560.0
+@export var jump_height_tiles: float = 3.0
 @export var gravity: float = 1500.0
+@export var terminal_fall_speed: float = 1000.0
 @export var coyote_time: float = 0.12
 @export var jump_buffer: float = 0.12
-@export var show_body_in_eye: bool = false
-@export var direct_jump_enabled: bool = true
-@export var collision_rebound_enabled: bool = false
-@export var rebound_ratio: float = 0.55
-@export var impulse_drag_ground: float = 450.0
-@export var impulse_drag_air: float = 120.0
-@export var movement_rules: MovementRules = preload("res://resources/movement_rules.tres")
+@export var walk_wave_interval_tiles: float = 1.0
 
-var controls_enabled: bool = false
-var debug_visible: bool = false
+var controls_enabled: bool = false:
+	set(value):
+		controls_enabled = value
+		if not value:
+			_jump_remaining = 0.0
+			_coyote_remaining = 0.0
+
 var _coyote_remaining: float = 0.0
 var _jump_remaining: float = 0.0
-var _step_distance: float = 0.0
-var _clear_platform_on_next_step: bool = false
-var _external_x: float = 0.0
-var _impact_cooldown: float = 0.0
 var _fall_apex_y: float = 0.0
-var _tracking_fall: bool = false
-var last_drop_pixels: float = 0.0
-var last_rebound_tier: int = 0
-var last_rebound_pixels: float = 0.0
+var _walk_wave_distance: float = 0.0
+var _was_moving_grounded: bool = false
+
+func _ready() -> void:
+	_fall_apex_y = global_position.y
 
 func _physics_process(delta: float) -> void:
 	if not controls_enabled:
 		return
 	var was_grounded := is_on_floor()
-	if not _tracking_fall or (was_grounded and velocity.y >= 0.0):
-		_fall_apex_y = global_position.y
-		_tracking_fall = true
-	_fall_apex_y = minf(_fall_apex_y, global_position.y)
-	_impact_cooldown = maxf(0.0, _impact_cooldown - delta)
-	_coyote_remaining = coyote_time if was_grounded else maxf(0.0, _coyote_remaining - delta)
 	_jump_remaining = maxf(0.0, _jump_remaining - delta)
-	if direct_jump_enabled and Input.is_action_just_pressed("jump"):
+	_coyote_remaining = coyote_time if was_grounded else maxf(0.0, _coyote_remaining - delta)
+	if was_grounded and velocity.y >= 0.0:
+		_fall_apex_y = global_position.y
+	_fall_apex_y = minf(_fall_apex_y, global_position.y)
+	if Input.is_action_just_pressed("jump"):
 		_jump_remaining = jump_buffer
+
 	var axis := Input.get_axis("move_left", "move_right")
-	var controlled_x := velocity.x - _external_x
-	controlled_x = move_toward(controlled_x, axis * speed, acceleration * delta)
-	_external_x = move_toward(_external_x, 0.0, (impulse_drag_ground if was_grounded else impulse_drag_air) * delta)
-	velocity.x = controlled_x + _external_x
-	velocity.y = minf(velocity.y + gravity * delta, 1000.0)
-	if direct_jump_enabled and _jump_remaining > 0.0 and _coyote_remaining > 0.0:
-		velocity.y = jump_velocity
+	velocity.x = move_toward(velocity.x, axis * speed, acceleration * delta)
+	velocity.y = minf(velocity.y + gravity * delta, terminal_fall_speed)
+	if _jump_remaining > 0.0 and _coyote_remaining > 0.0:
+		# Jump velocity is applied after this tick's gravity, so compensate one gravity step.
+		var launch := _launch_speed(jump_height_tiles * TILE_SIZE, gravity) - gravity / Engine.physics_ticks_per_second
+		velocity.y = -launch
 		_jump_remaining = 0.0
 		_coyote_remaining = 0.0
-		sound_emitted.emit(global_position + Vector2(0, 20), 0.6)
-	if direct_jump_enabled and Input.is_action_just_released("jump") and velocity.y < -200.0:
-		velocity.y = -200.0
-	# A respawn must not inherit the old ferry's teleport velocity or cached floor attachment.
-	if _clear_platform_on_next_step:
-		platform_floor_layers = 0
-	var incoming := velocity
+
+	var pre_x := global_position.x
 	move_and_slide()
 	_fall_apex_y = minf(_fall_apex_y, global_position.y)
-	if collision_rebound_enabled and _impact_cooldown <= 0.0:
-		for i in range(get_slide_collision_count()):
-			var contact := get_slide_collision(i)
-			var normal := contact.get_normal()
-			if normal.y < -0.7:
-				if not was_grounded:
-					_resolve_landing(contact.get_position())
-				continue
-			var impact_speed := -incoming.dot(normal)
-			if impact_speed > 100.0:
-				_external_x = 0.0 if absf(normal.x) > 0.7 else _external_x
-				_impact_cooldown = 0.2
-				var force := normal * maxf(130.0, impact_speed * rebound_ratio)
-				add_impulse(force, "撞击反弹")
-				wall_impact.emit(contact.get_position(), normal, force.length())
-				break
-	if _clear_platform_on_next_step:
-		platform_floor_layers = 1
-		_clear_platform_on_next_step = false
-	if is_on_floor():
-		if not was_grounded:
-			sound_emitted.emit(global_position + Vector2(0, 20), 1.0)
-		_step_distance += absf(velocity.x) * delta
-		if _step_distance > 66.0:
-			_step_distance = 0.0
-			sound_emitted.emit(global_position + Vector2(0, 20), 0.48)
+	if not was_grounded and is_on_floor():
+		_emit_landing_wave()
+	_emit_step_waves(was_grounded, pre_x)
 	queue_redraw()
+
+func _emit_landing_wave() -> void:
+	var drop := maxf(0.0, global_position.y - _fall_apex_y)
+	var tiles := floori((drop + CONTACT_TOLERANCE_PIXELS) / TILE_SIZE)
+	_fall_apex_y = global_position.y
+	if tiles < 1:
+		return
+	var level := 0
+	if tiles >= 4:
+		level = 2
+	elif tiles >= 2:
+		level = 1
+	wave_emitted.emit(global_position, float(WAVE_SIDE_TILES[level]) * TILE_SIZE, level, "landing")
+
+func _emit_step_waves(was_grounded: bool, pre_x: float) -> void:
+	var moved := absf(global_position.x - pre_x)
+	if not was_grounded:
+		_was_moving_grounded = false
+		return
+	var interval := maxf(1.0, walk_wave_interval_tiles * TILE_SIZE)
+	var moving := absf(velocity.x) > 1.0
+	# Emit one frame immediately when starting to walk, so continuous movement is always covered.
+	if moved > 0.01 and moving and not _was_moving_grounded:
+		_walk_wave_distance = maxf(_walk_wave_distance, interval)
+	_was_moving_grounded = moving
+	_walk_wave_distance += moved
+	while _walk_wave_distance >= interval:
+		_walk_wave_distance -= interval
+		wave_emitted.emit(global_position, float(WAVE_SIDE_TILES[0]) * TILE_SIZE, 0, "step")
 
 func reset_to(point: Vector2) -> void:
 	global_position = point
 	velocity = Vector2.ZERO
 	_coyote_remaining = 0.0
 	_jump_remaining = 0.0
-	_step_distance = 0.0
-	_clear_platform_on_next_step = true
-	_external_x = 0.0
-	_impact_cooldown = 0.0
+	_walk_wave_distance = 0.0
+	_was_moving_grounded = false
 	_fall_apex_y = point.y
-	_tracking_fall = true
-	last_drop_pixels = 0.0
-	last_rebound_tier = 0
-	last_rebound_pixels = 0.0
-	reset_physics_interpolation()
 
-func _resolve_landing(contact_position: Vector2) -> void:
-	last_drop_pixels = maxf(0.0, global_position.y - _fall_apex_y)
-	last_rebound_tier = movement_rules.rebound_tier(last_drop_pixels)
-	last_rebound_pixels = movement_rules.rebound_height_pixels(last_rebound_tier)
-	if last_rebound_tier > 0:
-		var launch := movement_rules.launch_speed(last_rebound_pixels, gravity)
-		velocity.y = -launch
-		_fall_apex_y = global_position.y
-		_impact_cooldown = 0.2
-		impulse_received.emit(Vector2(0, -launch), "落地反弹")
-		wall_impact.emit(contact_position, Vector2.UP, launch)
-	if last_drop_pixels >= movement_rules.tile_size * 0.5:
-		rebound_resolved.emit(last_drop_pixels, last_rebound_tier, last_rebound_pixels)
-
-func add_impulse(impulse: Vector2, source: String = "声波推力") -> void:
-	var previous_y := velocity.y
-	_external_x = clampf(_external_x + impulse.x, -900.0, 900.0)
-	velocity.x = clampf(velocity.x + impulse.x, -1100.0, 1100.0)
-	velocity.y = clampf(velocity.y + impulse.y, -1100.0, 1100.0)
-	if previous_y >= 0.0 and velocity.y < 0.0:
-		_fall_apex_y = global_position.y
-		_tracking_fall = true
-	impulse_received.emit(impulse, source)
+func _launch_speed(height_pixels: float, g: float) -> float:
+	if height_pixels <= 0.0:
+		return 0.0
+	# Semi-implicit Euler applies gravity before movement; compensate half a physics step.
+	return sqrt(2.0 * g * height_pixels) + g / (2.0 * Engine.physics_ticks_per_second)
 
 func _draw() -> void:
-	if not show_body_in_eye and not debug_visible:
-		return
 	draw_rect(Rect2(-12, -20, 24, 40), Color.WHITE)
 	draw_rect(Rect2(-12, -12, 24, 5), Color.BLACK)
