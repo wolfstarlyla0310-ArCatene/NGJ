@@ -1,0 +1,115 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/l_relay_puzzle.gd" id="1_puzzle"]
+[ext_resource type="PackedScene" path="res://scenes/actors/wall_platform.tscn" id="2_wall"]
+[ext_resource type="PackedScene" path="res://scenes/actors/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/actors/eye.tscn" id="4_eye"]
+[ext_resource type="Script" path="res://scripts/hud.gd" id="5_hud"]
+[ext_resource type="PackedScene" path="res://scenes/actors/pressure_plate.tscn" id="6_plate"]
+[ext_resource type="Script" path="res://scripts/bell.gd" id="7_bell"]
+
+[sub_resource type="SystemFont" id="SystemFont_cn"]
+font_names = PackedStringArray("Microsoft YaHei", "sans-serif")
+
+[sub_resource type="Theme" id="Theme_world"]
+default_font = SubResource("SystemFont_cn")
+default_font_size = 14
+
+[node name="LRelayPuzzle" type="Node2D"]
+script = ExtResource("1_puzzle")
+
+[node name="Terrain" type="Node2D" parent="."]
+
+[node name="Floor" parent="Terrain" instance=ExtResource("2_wall")]
+position = Vector2(96, 512)
+tiles_wide = 27
+tiles_high = 2
+
+[node name="LeftSpine" parent="Terrain" instance=ExtResource("2_wall")]
+position = Vector2(96, 352)
+tiles_wide = 4
+tiles_high = 5
+
+[node name="GateOne" parent="Terrain" instance=ExtResource("2_wall")]
+position = Vector2(960, 512)
+tiles_wide = 2
+tiles_high = 2
+
+[node name="RightWall" parent="Terrain" instance=ExtResource("2_wall")]
+position = Vector2(1024, 192)
+tiles_wide = 4
+tiles_high = 12
+
+[node name="Ferry" parent="Terrain" instance=ExtResource("2_wall")]
+position = Vector2(928, 352)
+tiles_wide = 3
+tiles_high = 2
+
+[node name="UpperDrop" parent="Terrain" instance=ExtResource("2_wall")]
+position = Vector2(576, 128)
+tiles_wide = 3
+tiles_high = 4
+
+[node name="GateTwo" parent="Terrain" instance=ExtResource("2_wall")]
+position = Vector2(224, 224)
+tiles_wide = 11
+tiles_high = 2
+
+[node name="Exit" parent="Terrain" instance=ExtResource("2_wall")]
+position = Vector2(96, 160)
+tiles_wide = 4
+tiles_high = 4
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+position = Vector2(656, 490)
+show_body_in_eye = true
+
+[node name="Eye" parent="." instance=ExtResource("4_eye")]
+position = Vector2(288, 544)
+dark_marker = true
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(640, 360)
+position_smoothing_enabled = false
+
+[node name="PlateOne" parent="." instance=ExtResource("6_plate")]
+position = Vector2(816, 511)
+
+[node name="PlateTwo" parent="." instance=ExtResource("6_plate")]
+position = Vector2(400, 511)
+
+[node name="Bell" type="Node2D" parent="."]
+position = Vector2(1088, 384)
+z_index = 6
+script = ExtResource("7_bell")
+
+[node name="Signs" type="Node2D" parent="."]
+
+[node name="PlateOneLabel" type="Label" parent="Signs"]
+offset_left = 736.0
+offset_top = 454.0
+theme = SubResource("Theme_world")
+text = "01 / 接通右墙"
+
+[node name="PlateTwoLabel" type="Label" parent="Signs"]
+offset_left = 328.0
+offset_top = 454.0
+theme = SubResource("Theme_world")
+text = "02 / 接通上方"
+
+[node name="BellLabel" type="Label" parent="Signs"]
+offset_left = 1046.0
+offset_top = 424.0
+theme = SubResource("Theme_world")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "靠近 · 点击"
+
+[node name="ExitLabel" type="Label" parent="Signs"]
+offset_left = 112.0
+offset_top = 124.0
+theme = SubResource("Theme_world")
+text = "出口"
+
+[node name="HUD" type="CanvasLayer" parent="."]
+layer = 10
+script = ExtResource("5_hud")
