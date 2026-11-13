@@ -12,7 +12,7 @@ var wave_container: Node2D
 func _process(_delta: float) -> void:
 	queue_redraw()
 
-func echo_at(point: Vector2) -> float:
+func echo_at(point: Vector2, type: int = -1) -> float:
 	if eye == null or wave_container == null:
 		return 0.0
 	var ear_distance := point.distance_to(eye.global_position)
@@ -20,7 +20,7 @@ func echo_at(point: Vector2) -> float:
 		return 0.0
 	var intensity: float = 0.0
 	for wave in wave_container.get_children():
-		if wave.is_queued_for_deletion():
+		if wave.is_queued_for_deletion() or (type >= 0 and wave.wave_type != type):
 			continue
 		var arrival: float = point.distance_to(wave.global_position) / wave_speed
 		var elapsed: float = wave.age - arrival
@@ -58,6 +58,7 @@ func _draw_reflected_edge(a: Vector2, b: Vector2, normal: Vector2, owner_wall: W
 				break
 		if inside_neighbor:
 			continue
-		var alpha := echo_at(middle)
-		if alpha > 0.015:
-			draw_line(start, end, Color(1, 1, 1, alpha), 1.7, true)
+		for type in WaveTypes.WaveType.values():
+			var alpha := echo_at(middle, type)
+			if alpha > 0.015:
+				draw_line(to_local(start), to_local(end), Color(WaveTypes.color_for(type), alpha), 1.7, true)

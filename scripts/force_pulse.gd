@@ -4,6 +4,8 @@ extends Node2D
 
 signal hit_player(impulse: Vector2)
 
+var wave_type: WaveTypes.WaveType = WaveTypes.WaveType.WHITE
+var snap_to_grid: bool = true
 var target: EchoPlayer
 var max_radius: float = 240.0
 var wave_speed: float = 760.0
@@ -20,7 +22,8 @@ func _ready() -> void:
 	process_physics_priority = -10
 	lifetime = max_radius / wave_speed + 0.28
 	if not visual_only:
-		global_position = movement_rules.cell_center(movement_rules.cell_at(global_position, grid_origin), grid_origin)
+		if snap_to_grid:
+			global_position = movement_rules.cell_center(movement_rules.cell_at(global_position, grid_origin), grid_origin)
 		if push_strength <= 0.0:
 			var gravity: float = target.gravity if is_instance_valid(target) else 1500.0
 			push_strength = movement_rules.launch_speed(movement_rules.wave_jump_height_tiles * movement_rules.tile_size, gravity)
@@ -45,8 +48,9 @@ func _physics_process(delta: float) -> void:
 		queue_redraw()
 
 func _draw() -> void:
+	var color := WaveTypes.color_for(wave_type)
 	var alpha := clampf((lifetime - age) / 0.28, 0.0, 1.0)
 	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 100, Color(0, 0, 0, alpha * 0.8), 4.0, true)
-	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 100, Color(1, 1, 1, alpha), 1.5, true)
+	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 100, Color(color, alpha), 1.5, true)
 	if radius > 18.0:
-		draw_arc(Vector2.ZERO, radius - 12.0, 0.0, TAU, 100, Color(1, 1, 1, alpha * 0.25), 1.0, true)
+		draw_arc(Vector2.ZERO, radius - 12.0, 0.0, TAU, 100, Color(color, alpha * 0.25), 1.0, true)
