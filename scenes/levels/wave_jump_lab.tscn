@@ -66,7 +66,7 @@ z_index = 7
 offset_left = 208.0
 offset_top = 300.0
 theme = SubResource("Theme_signs")
-text = "01 / 圆点在脚下，左键起跳"
+text = "01 / 点击脚下同列墙格"
 
 [node name="LowTip" type="Label" parent="Signs"]
 offset_left = 554.0
@@ -79,6 +79,44 @@ offset_left = 816.0
 offset_top = 246.0
 theme = SubResource("Theme_signs")
 text = "03 / 再用声波跳上高台"
+
+[node name="DropRuler" type="Line2D" parent="."]
+points = PackedVector2Array(1192, 288, 1192, 544)
+width = 1.0
+default_color = Color(0.35, 0.35, 0.35, 1)
+
+[node name="TwoTilesTick" type="Line2D" parent="DropRuler"]
+points = PackedVector2Array(1184, 480, 1200, 480)
+width = 1.0
+default_color = Color(0.7, 0.7, 0.7, 1)
+
+[node name="FourTilesTick" type="Line2D" parent="DropRuler"]
+points = PackedVector2Array(1184, 416, 1200, 416)
+width = 1.0
+default_color = Color(0.7, 0.7, 0.7, 1)
+
+[node name="EightTilesTick" type="Line2D" parent="DropRuler"]
+points = PackedVector2Array(1184, 288, 1200, 288)
+width = 1.0
+default_color = Color(0.7, 0.7, 0.7, 1)
+
+[node name="TwoTilesLabel" type="Label" parent="Signs"]
+offset_left = 1206.0
+offset_top = 468.0
+theme = SubResource("Theme_signs")
+text = "2 格"
+
+[node name="FourTilesLabel" type="Label" parent="Signs"]
+offset_left = 1206.0
+offset_top = 404.0
+theme = SubResource("Theme_signs")
+text = "4 格"
+
+[node name="EightTilesLabel" type="Label" parent="Signs"]
+offset_left = 1206.0
+offset_top = 276.0
+theme = SubResource("Theme_signs")
+text = "8 格"
 
 [node name="HUD" type="CanvasLayer" parent="."]
 layer = 10

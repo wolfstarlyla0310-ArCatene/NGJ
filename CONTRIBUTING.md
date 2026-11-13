@@ -2,7 +2,7 @@
 
 - 引擎版本统一为 Godot 4.7.2 标准版，使用 GDScript。
 - `main` 保持能导入、能运行。新功能在 `feature/功能名` 分支开发，修复在 `fix/问题名` 分支开发。
-- 提交前运行游戏，验证受影响的玩法；声波跳跃运行 `tests/wave_jump_checks.gd`，机关运行 `tests/puzzle_checks.gd`，早期移动平台回归运行 `tests/gameplay_checks.gd`。
+- 提交前运行游戏，验证受影响的玩法；分档反弹与整格点击运行 `tests/grid_rebound_checks.gd`，声波跳跃运行 `tests/wave_jump_checks.gd`，机关运行 `tests/puzzle_checks.gd`，早期移动平台回归运行 `tests/gameplay_checks.gd`。
 - PR 写明改动、试玩操作和已验证项。涉及画面时附一张正常模式截图。
 - 复用 `scenes/actors/` 中的场景；新增关卡优先新建场景文件。
 - 公共脚本与地图修改先在团队内协调，避免多人同时编辑相同场景。

@@ -3,7 +3,7 @@ extends Node2D
 const PULSE_SCRIPT := preload("res://scripts/force_pulse.gd")
 
 @export var pulse_range: float = 240.0
-@export var pulse_strength: float = 840.0
+@export var movement_rules: MovementRules = preload("res://resources/movement_rules.tres")
 @export_range(0.0, 1.0, 0.01) var pulse_cooldown: float = 0.0
 
 var active: bool = false
@@ -16,6 +16,7 @@ var _was_on_floor: bool = false
 var _wave_pending_jump: bool = false
 var _paused: bool = false
 var _started: bool = false
+var _last_rebound: String = "—"
 
 @onready var player: EchoPlayer = $Player
 @onready var eye: WallEye = $Eye
@@ -32,22 +33,28 @@ func _ready() -> void:
 	player.show_body_in_eye = true
 	player.direct_jump_enabled = false
 	player.collision_rebound_enabled = true
+	player.movement_rules = movement_rules
+	eye.movement_rules = movement_rules
+	eye.show_source_tile = true
 	player.impulse_received.connect(_on_impulse)
 	player.wall_impact.connect(_on_wall_impact)
+	player.rebound_resolved.connect(_on_rebound_resolved)
 	eye.range_preview = pulse_range
-	hud.chapter.text = "第二轮   声波跳跃   ·   自由鼠标 / 无冷却"
+	hud.chapter.text = "第三轮   32 像素一格   ·   分档反弹 / 四向发波"
 	hud.metric_caption.text = "墙内 · 可发波"
-	hud.controls_label.text = "A / D 横移    鼠标自由移动    左键在墙内发波    R 重来    Esc 暂停    F1 普通跳跃开关    F2 旧机关"
+	hud.controls_label.text = "A / D 横移    左键整格发波    1 / 2 / 3 落下测试    R 重来    Esc 暂停    F1 普通跳跃    F2 旧机关"
 	_reset_actors()
-	hud.status.text = "圆点在脚下 → 左键发波起跳 → A / D 控制空中横移。"
-	hud.statistics.text = "声波起跳 00   /   普通跳跃 关"
+	hud.status.text = "点击脚下同列墙格起跳，斜格不施力；A / D 调整落点。"
+	hud.statistics.text = "起跳 00   /   最近落地 —"
 	hud.margin_bar.value = 100.0
-	hud.show_message("自由选点，墙内发波", "鼠标可以自由移动，跨越墙体和空隙。\n移到墙内，连续点击左键发波，无冷却。\n墙外点击不会产生声波，也不会推动身体。\n\n单击或 Enter 开始 · 普通空格跳跃默认关闭")
+	hud.show_message("按格点击，按档反弹", "同一格内点击，发波位置和力度都相同。\n只推同一行或同一列的玩家，斜对角格无效。\n落下 2 / 4 / 8 格，固定反弹 1 / 2 / 4 格。\n\n单击或 Enter 开始 · 数字 1 / 2 / 3 快速测落下")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F2:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_tree().change_scene_to_file("res://scenes/levels/l_relay_puzzle.tscn")
+	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode in [KEY_1, KEY_2, KEY_3]:
+		start_drop_test([2, 4, 8][event.physical_keycode - KEY_1])
 	elif event.is_action_pressed("restart") and not event.is_echo():
 		restart_run()
 	elif event.is_action_pressed("debug_view") and not event.is_echo():
@@ -92,12 +99,13 @@ func _physics_process(delta: float) -> void:
 	elif player.position.y < 280.0 and player.position.x > 800.0:
 		hud.status.text = "已跳上高台。继续测试四向推力，或按 R 重来。"
 	else:
-		hud.status.text = "圆点在脚下 → 左键发波起跳 → A / D 控制空中横移。"
-	hud.statistics.text = "声波起跳 %02d   /   普通跳跃 %s" % [wave_jumps, "开" if player.direct_jump_enabled else "关"]
+		hud.status.text = "点击脚下同列墙格起跳，斜格不施力；A / D 调整落点。"
+	hud.statistics.text = "起跳 %02d   /   最近落地 %s" % [wave_jumps, _last_rebound]
 	var inside := eye.is_inside_wall()
-	hud.metric_caption.text = "墙内 · 可发波" if inside else "墙外 · 无法发波"
+	var aligned := inside and not movement_rules.cardinal_direction(eye.source_tile_bounds().get_center(), player.global_position, eye.source_wall().global_position).is_zero_approx()
+	hud.metric_caption.text = ("同排同列 · 可施力" if aligned else "斜格 · 不施力") if inside else "墙外 · 无法发波"
 	var charge := 1.0 if pulse_cooldown <= 0.0 else clampf(1.0 - cooldown / pulse_cooldown, 0.0, 1.0)
-	hud.margin_bar.value = charge * 100.0 if inside else 0.0
+	hud.margin_bar.value = charge * 100.0 if aligned else 0.0
 
 func fire_pulse() -> Node2D:
 	if not active or cooldown > 0.0:
@@ -110,12 +118,26 @@ func fire_pulse() -> Node2D:
 	shots += 1
 	var pulse := Node2D.new()
 	pulse.set_script(PULSE_SCRIPT)
-	pulse.position = eye.global_position
+	pulse.position = eye.source_tile_bounds().get_center()
+	pulse.grid_origin = eye.source_wall().global_position
+	pulse.movement_rules = movement_rules
 	pulse.target = player
 	pulse.max_radius = pulse_range
-	pulse.push_strength = pulse_strength
+	pulse.push_strength = movement_rules.launch_speed(movement_rules.wave_jump_height_tiles * movement_rules.tile_size, player.gravity)
 	pulses.add_child(pulse)
 	return pulse
+
+func start_drop_test(tiles: int) -> void:
+	_reset_actors()
+	player.reset_to(Vector2(1152, 544.0 - 20.0 - tiles * movement_rules.tile_size))
+	_begin_or_resume()
+	_feedback = "落下测试：%d 格。观察落地档位与固定反弹高度。" % tiles
+	_feedback_time = 1.2
+
+func _on_rebound_resolved(drop_pixels: float, tier: int, rebound_pixels: float) -> void:
+	_last_rebound = "%d 档 / %.0f 格" % [tier, rebound_pixels / movement_rules.tile_size]
+	_feedback = "落差 %.1f 格 → %d 档 → 反弹 %.0f 格" % [drop_pixels / movement_rules.tile_size, tier, rebound_pixels / movement_rules.tile_size]
+	_feedback_time = 1.5
 
 func _on_impulse(impulse: Vector2, source: String) -> void:
 	var direction: String
@@ -147,6 +169,7 @@ func _reset_actors() -> void:
 	cooldown = 0.0
 	_wave_pending_jump = false
 	_was_on_floor = false
+	_last_rebound = "—"
 	for pulse in pulses.get_children():
 		pulse.queue_free()
 

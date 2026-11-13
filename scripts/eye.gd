@@ -9,6 +9,8 @@ extends Node2D
 @export var dark_marker: bool = false
 @export var range_preview: float = 0.0
 @export var free_cursor: bool = false
+@export var show_source_tile: bool = false
+@export var movement_rules: MovementRules = preload("res://resources/movement_rules.tres")
 
 var input_enabled: bool = false
 var walls: Array[WallPlatform] = []
@@ -91,10 +93,20 @@ func can_occupy(point: Vector2) -> bool:
 	return false
 
 func is_inside_wall() -> bool:
+	return source_wall() != null
+
+func source_wall() -> WallPlatform:
 	for wall in walls:
 		if wall.bounds().has_point(global_position):
-			return true
-	return false
+			return wall
+	return null
+
+func source_tile_bounds() -> Rect2:
+	var wall := source_wall()
+	if wall == null:
+		return Rect2()
+	var cell := movement_rules.cell_at(global_position, wall.global_position)
+	return Rect2(wall.global_position + Vector2(cell) * movement_rules.tile_size, Vector2.ONE * movement_rules.tile_size)
 
 func _update_host() -> void:
 	# If a moving platform overlaps a seam, prefer it, so departure carries the eye safely.
@@ -128,7 +140,16 @@ func _draw() -> void:
 	draw_arc(Vector2.ZERO, 7.0, 0.0, TAU, 32, ink, 1.0, true)
 	if free_cursor and not valid_source:
 		draw_line(Vector2(-4, -4), Vector2(4, 4), Color(1, 1, 1, 0.6), 1.0, true)
+	var source_offset := Vector2.ZERO
+	if show_source_tile and valid_source:
+		var tile := source_tile_bounds()
+		source_offset = tile.get_center() - global_position
+		var local_bounds := Rect2(tile.position - global_position, tile.size)
+		draw_rect(local_bounds.grow(-1.5), Color.WHITE, false, 3.0)
+		draw_rect(local_bounds.grow(-1.5), Color.BLACK, false, 1.0)
+		draw_line(source_offset - Vector2(3, 0), source_offset + Vector2(3, 0), Color.BLACK, 1.0)
+		draw_line(source_offset - Vector2(0, 3), source_offset + Vector2(0, 3), Color.BLACK, 1.0)
 	if range_preview > 0 and valid_source:
 		for i in range(48):
 			var angle := TAU * float(i) / 48.0
-			draw_arc(Vector2.ZERO, range_preview, angle, angle + 0.05, 5, Color(1, 1, 1, 0.23), 1.0, true)
+			draw_arc(source_offset, range_preview, angle, angle + 0.05, 5, Color(1, 1, 1, 0.23), 1.0, true)

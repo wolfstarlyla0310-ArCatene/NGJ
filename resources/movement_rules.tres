@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="MovementRules" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/movement_rules.gd" id="1_rules"]
+
+[resource]
+script = ExtResource("1_rules")
+tile_size = 32.0
+fall_thresholds_tiles = PackedFloat32Array(2, 4, 8)
+rebound_heights_tiles = PackedFloat32Array(1, 2, 4)
+wave_jump_height_tiles = 5.0
+contact_tolerance_pixels = 0.25
