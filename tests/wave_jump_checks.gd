@@ -51,7 +51,7 @@ func _run() -> void:
 	Input.action_release("jump")
 	check(absf(level.player.position.y - ground_y) < 1.0, "Space alone cannot launch player in wave mode")
 	var wave: Node2D = level.fire_pulse()
-	check(wave != null and level.fire_pulse() == null, "Left-click pulse has a finite range and a recharge interval")
+	check(wave != null and level.pulse_cooldown == 0.0 and level.cooldown == 0.0, "Wall pulse starts with zero cooldown")
 	await frames(24)
 	check(wave.has_hit and level.player.velocity.y < -300.0, "Wave from below launches player upward")
 	check(level.player.position.y < ground_y - 35.0 and not level.player.is_on_floor(), "Wave jump really leaves the ground")
@@ -118,6 +118,51 @@ func _run() -> void:
 	if not (level.player.is_on_floor() and level.player.position.y < 280.0):
 		print("High platform diagnostic: player=", level.player.position, " velocity=", level.player.velocity)
 	check(level.player.is_on_floor() and level.player.position.y < 280.0 and level.player.position.x >= 748.0, "A second sound-powered jump reaches the high platform")
+
+	# Round two: free absolute pointer, restricted emission, and repeated zero-cooldown clicks.
+	level.restart_run()
+	await frames(8)
+	check(level.eye.free_cursor, "Wave lab enables unrestricted pointer movement")
+	check(Input.mouse_mode != Input.MOUSE_MODE_CAPTURED, "Free mouse is never captured inside the window")
+	move_pointer(Vector2(480, 200))
+	await frames(2)
+	check(level.eye.position.distance_to(Vector2(480, 200)) < 0.01 and level.eye.host == null, "Pointer can leave walls without snapping back or attaching to a platform")
+	var shots_before: int = level.shots
+	count_before = impulses.size()
+	check(level.fire_pulse() == null and level.shots == shots_before, "Clicking in air creates no wave and consumes no shot")
+	await frames(35)
+	check(impulses.size() == count_before and level.player.is_on_floor(), "Invalid air click cannot push or launch the player")
+	check(is_finite(level.hud.margin_bar.value), "Zero cooldown keeps the HUD finite without division by zero")
+	move_pointer(Vector2(700, 448))
+	await frames(2)
+	check(level.eye.position.distance_to(Vector2(700, 448)) < 0.01 and level.eye.is_inside_wall(), "Pointer can cross empty space directly into a disconnected ledge")
+	level.player.controls_enabled = false
+	move_pointer(Vector2(320, 576))
+	var created := 0
+	for _i in range(10):
+		if level.fire_pulse() != null:
+			created += 1
+	check(created == 10 and level.cooldown == 0.0, "Ten consecutive wall clicks emit ten waves without cooldown")
+	level.pulse_cooldown = 0.05
+	check(level.fire_pulse() != null and level.fire_pulse() == null, "Optional very short cooldown remains configurable")
+	await frames(8)
+	check(level.fire_pulse() != null, "Optional short cooldown recharges normally")
+	level.pulse_cooldown = 0.0
+	level.cooldown = 0.0
+	move_pointer(Vector2(65, 576))
+	check(level.eye.is_inside_wall() and level.fire_pulse() != null, "Wall emission checks the pointer tip, including near a wall edge")
+	shots_before = level.shots
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = root.get_canvas_transform() * Vector2(500, 200)
+	root.push_input(click, true)
+	check(level.shots == shots_before and level.eye.position.distance_to(Vector2(500, 200)) < 0.01, "Air click uses its actual position even without a preceding mouse-motion event")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	print("\nWave jump checks: ", "ALL PASSED" if failures.is_empty() else "%d FAILED" % failures.size())
 	quit(0 if failures.is_empty() else 1)
+
+func move_pointer(world_position: Vector2) -> void:
+	var motion := InputEventMouseMotion.new()
+	motion.position = root.get_canvas_transform() * world_position
+	root.push_input(motion, true)

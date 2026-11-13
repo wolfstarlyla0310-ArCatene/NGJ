@@ -52,6 +52,7 @@ collision_rebound_enabled = true
 [node name="Eye" parent="." instance=ExtResource("4_eye")]
 position = Vector2(320, 576)
 dark_marker = true
+free_cursor = true
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(640, 380)

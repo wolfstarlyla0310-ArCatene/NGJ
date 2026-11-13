@@ -12,6 +12,7 @@ func _run() -> void:
 	DirAccess.make_dir_recursive_absolute("res://docs/previews")
 	root.get_texture().get_image().save_png("res://docs/previews/wave-jump-start.png")
 	level.restart_run()
+	level.eye.input_enabled = false
 	for _i in range(12):
 		await physics_frame
 	level.fire_pulse()

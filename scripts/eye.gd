@@ -1,6 +1,6 @@
 class_name WallEye
 extends Node2D
-## Mouse motion is swept through the UNION of solids. A gap can never be teleported across.
+## Free cursor for wave tests; constrained movement remains available for the earlier relay.
 
 @export var radius: float = 12.0
 @export var sensitivity: float = 1.0
@@ -8,6 +8,7 @@ extends Node2D
 @export var hearing_radius: float = 760.0
 @export var dark_marker: bool = false
 @export var range_preview: float = 0.0
+@export var free_cursor: bool = false
 
 var input_enabled: bool = false
 var walls: Array[WallPlatform] = []
@@ -21,11 +22,25 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if input_enabled and event is InputEventMouseMotion:
-		_pending_motion += event.relative * sensitivity
+		if free_cursor:
+			place_cursor(event.position)
+		else:
+			_pending_motion += event.relative * sensitivity
+
+func place_cursor(viewport_position: Vector2) -> void:
+	global_position = get_viewport().get_canvas_transform().affine_inverse() * viewport_position
+	host = null
+	_pending_motion = Vector2.ZERO
+	queue_redraw()
 
 func _physics_process(_delta: float) -> void:
 	if not input_enabled:
 		_pending_motion = Vector2.ZERO
+		return
+	if free_cursor:
+		host = null
+		_pending_motion = Vector2.ZERO
+		queue_redraw()
 		return
 	if is_instance_valid(host):
 		global_position += host.global_position - _host_position
@@ -75,6 +90,12 @@ func can_occupy(point: Vector2) -> bool:
 			return true
 	return false
 
+func is_inside_wall() -> bool:
+	for wall in walls:
+		if wall.bounds().has_point(global_position):
+			return true
+	return false
+
 func _update_host() -> void:
 	# If a moving platform overlaps a seam, prefer it, so departure carries the eye safely.
 	var candidate: WallPlatform = null
@@ -100,11 +121,14 @@ func reset_to(point: Vector2, start_wall: WallPlatform) -> void:
 
 func _draw() -> void:
 	# A neutral locator, with no eye/face anatomy.
-	var ink := Color.BLACK if dark_marker else Color.WHITE
+	var valid_source := is_inside_wall() if free_cursor else true
+	var ink := Color.BLACK if (valid_source and (dark_marker or free_cursor)) else Color.WHITE
 	draw_circle(Vector2.ZERO, 2.5, ink)
 	ink.a = 0.45
 	draw_arc(Vector2.ZERO, 7.0, 0.0, TAU, 32, ink, 1.0, true)
-	if range_preview > 0:
+	if free_cursor and not valid_source:
+		draw_line(Vector2(-4, -4), Vector2(4, 4), Color(1, 1, 1, 0.6), 1.0, true)
+	if range_preview > 0 and valid_source:
 		for i in range(48):
 			var angle := TAU * float(i) / 48.0
 			draw_arc(Vector2.ZERO, range_preview, angle, angle + 0.05, 5, Color(1, 1, 1, 0.23), 1.0, true)
