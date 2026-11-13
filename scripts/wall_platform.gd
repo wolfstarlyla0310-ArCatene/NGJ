@@ -13,6 +13,19 @@ extends AnimatableBody2D
 		tiles_high = maxi(value, 1)
 		if is_node_ready():
 			_rebuild()
+@export var wave_type: WaveTypes.WaveType = WaveTypes.WaveType.WHITE:
+	set(value):
+		wave_type = value
+		if is_node_ready(): _rebuild()
+## Local 32px cell overrides. Blue wins if a cell is in both arrays.
+@export var red_cells: Array[Vector2i] = []:
+	set(value):
+		red_cells = value
+		if is_node_ready(): _rebuild()
+@export var blue_cells: Array[Vector2i] = []:
+	set(value):
+		blue_cells = value
+		if is_node_ready(): _rebuild()
 @export var travel_offset := Vector2.ZERO
 @export var travel_speed: float = 150.0
 @export var dock_wait: float = 1.8
@@ -47,7 +60,7 @@ func _rebuild() -> void:
 	for x in range(tiles_wide):
 		for y in range(tiles_high):
 			var atlas_x: int = 0 if y == 0 else (2 if y == tiles_high - 1 else 1)
-			tiles.set_cell(Vector2i(x, y), 0, Vector2i(atlas_x, 0))
+			tiles.set_cell(Vector2i(x, y), 0, Vector2i(atlas_x, 0), _type_for_cell(Vector2i(x, y)))
 	var rectangle := RectangleShape2D.new()
 	rectangle.size = Vector2(tiles_wide, tiles_high) * 32.0
 	collision.shape = rectangle
@@ -77,3 +90,15 @@ func reset_motion() -> void:
 	_target_is_far = true
 	_wait_remaining = dock_wait
 	reset_physics_interpolation()
+
+func _type_for_cell(cell: Vector2i) -> WaveTypes.WaveType:
+	if cell in blue_cells: return WaveTypes.WaveType.BLUE
+	if cell in red_cells: return WaveTypes.WaveType.RED
+	return wave_type
+
+func wave_type_at(world_position: Vector2) -> WaveTypes.WaveType:
+	var cell := tiles.local_to_map(tiles.to_local(world_position))
+	var data := tiles.get_cell_tile_data(cell)
+	if data != null:
+		return int(data.get_custom_data("wave_type")) as WaveTypes.WaveType
+	return wave_type

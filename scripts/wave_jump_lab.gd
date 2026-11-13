@@ -116,16 +116,15 @@ func fire_pulse() -> Node2D:
 		return null
 	cooldown = maxf(0.0, pulse_cooldown)
 	shots += 1
-	var pulse := Node2D.new()
-	pulse.set_script(PULSE_SCRIPT)
-	pulse.position = eye.source_tile_bounds().get_center()
-	pulse.grid_origin = eye.source_wall().global_position
-	pulse.movement_rules = movement_rules
-	pulse.target = player
-	pulse.max_radius = pulse_range
-	pulse.push_strength = movement_rules.launch_speed(movement_rules.wave_jump_height_tiles * movement_rules.tile_size, player.gravity)
-	pulses.add_child(pulse)
-	return pulse
+	var wall := eye.source_wall()
+	return emit_wave(eye.source_tile_bounds().get_center(), wall.wave_type_at(eye.source_tile_bounds().get_center()), {"grid_origin": wall.global_position})
+
+## Shared entry for clicks, impacts and reusable sources. Origin is always global.
+func emit_wave(origin: Vector2, type: WaveTypes.WaveType = WaveTypes.WaveType.WHITE, options: Dictionary = {}) -> Node2D:
+	var settings := {"movement_rules": movement_rules, "target": player, "max_radius": pulse_range,
+		"push_strength": movement_rules.launch_speed(movement_rules.wave_jump_height_tiles * movement_rules.tile_size, player.gravity)}
+	settings.merge(options, true)
+	return WaveFactory.spawn(pulses, origin, type, settings)
 
 func start_drop_test(tiles: int) -> void:
 	_reset_actors()
@@ -150,14 +149,14 @@ func _on_impulse(impulse: Vector2, source: String) -> void:
 	if source == "声波推力" and impulse.y < -100.0 and player.is_on_floor():
 		_wave_pending_jump = true
 
-func _on_wall_impact(origin: Vector2, _normal: Vector2, _strength: float) -> void:
-	var pulse := Node2D.new()
-	pulse.set_script(PULSE_SCRIPT)
-	pulse.position = origin
-	pulse.max_radius = 70.0
-	pulse.wave_speed = 300.0
-	pulse.visual_only = true
-	pulses.add_child(pulse)
+func _on_wall_impact(origin: Vector2, normal: Vector2, _strength: float) -> void:
+	var type := WaveTypes.WaveType.WHITE
+	# Probe inside the contacted solid, including top/right boundary contacts.
+	for wall in eye.walls:
+		if wall.bounds().has_point(origin - normal * 0.5):
+			type = wall.wave_type_at(origin - normal * 0.5)
+			break
+	emit_wave(origin, type, {"max_radius": 70.0, "wave_speed": 300.0, "visual_only": true})
 
 func restart_run() -> void:
 	_reset_actors()

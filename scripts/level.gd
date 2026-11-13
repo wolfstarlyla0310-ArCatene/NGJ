@@ -161,8 +161,10 @@ func _on_sound_emitted(origin: Vector2, strength: float) -> void:
 	var distance := eye.global_position.distance_to(origin)
 	if distance > eye.hearing_radius:
 		return
-	var wave := Node2D.new()
-	wave.set_script(WAVE_SCRIPT)
-	wave.position = origin
-	wave.strength = strength * lerpf(1.0, 0.25, distance / eye.hearing_radius)
-	waves.add_child(wave)
+	emit_wave(origin, WaveTypes.WaveType.WHITE, {"strength": strength * lerpf(1.0, 0.25, distance / eye.hearing_radius)})
+
+func emit_wave(origin: Vector2, type: WaveTypes.WaveType = WaveTypes.WaveType.WHITE, options: Dictionary = {}) -> Node2D:
+	var settings := {"echo": true}
+	# Force-pulse-only options have no meaning in the old reflection renderer.
+	if options.has("strength"): settings["strength"] = options["strength"]
+	return WaveFactory.spawn(waves, origin, type, settings)

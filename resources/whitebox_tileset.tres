@@ -6,9 +6,32 @@
 texture = ExtResource("1_texture")
 texture_region_size = Vector2i(32, 32)
 0:0/0 = 0
+0:0/0/custom_data_0 = 0
+0:0/1 = 1
+0:0/1/modulate = Color(1, 0.15, 0.15, 1)
+0:0/1/custom_data_0 = 1
+0:0/2 = 2
+0:0/2/modulate = Color(0.15, 0.4, 1, 1)
+0:0/2/custom_data_0 = 2
 1:0/0 = 0
+1:0/0/custom_data_0 = 0
+1:0/1 = 1
+1:0/1/modulate = Color(1, 0.15, 0.15, 1)
+1:0/1/custom_data_0 = 1
+1:0/2 = 2
+1:0/2/modulate = Color(0.15, 0.4, 1, 1)
+1:0/2/custom_data_0 = 2
 2:0/0 = 0
+2:0/0/custom_data_0 = 0
+2:0/1 = 1
+2:0/1/modulate = Color(1, 0.15, 0.15, 1)
+2:0/1/custom_data_0 = 1
+2:0/2 = 2
+2:0/2/modulate = Color(0.15, 0.4, 1, 1)
+2:0/2/custom_data_0 = 2
 
 [resource]
+custom_data_layer_0/name = "wave_type"
+custom_data_layer_0/type = 2
 tile_size = Vector2i(32, 32)
 sources/0 = SubResource("TileSetAtlasSource_whitebox")

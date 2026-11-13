@@ -1,5 +1,7 @@
 extends Node2D
 
+var wave_type: WaveTypes.WaveType = WaveTypes.WaveType.WHITE
+
 var strength: float = 1.0
 var age: float = 0.0
 var lifetime: float = 2.4
