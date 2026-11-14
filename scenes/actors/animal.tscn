@@ -11,8 +11,9 @@ z_index = 4
 collision_layer = 4
 floor_snap_length = 4.0
 script = ExtResource("1_script")
-move_wave_side_cells = null
+move_wave_side_cells = 3.0
 idle_wave_interval = 1.0
+idle_wave_side_cells = 5.0
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=115833916]
 texture = ExtResource("2_hemqq")

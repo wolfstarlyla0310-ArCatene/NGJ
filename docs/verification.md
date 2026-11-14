@@ -1,5 +1,26 @@
 # 验证记录
 
+2026-11-14（零净空顶头 lv2 / lv2 2 秒 / 房间裁剪）
+
+- `player.gd`：起跳瞬间用 `test_move(global_transform, Vector2.UP * 3px)` 记录头顶净空；零净空（一格高走廊约 2px）顶头 → lv2，有净空 → lv1。删除旧的上升距离判定。
+- `sound_field.gd` 新增 `LV2_LIFETIME = 2.0`；`world_map` / `wave_jump_lab` 的 `_on_wave` 对 level 2 使用该寿命（不再 `INF`）。
+- `room_registry.gd` 新增 `is_orthogonal_neighbor()` / `orthogonal_neighbors()`（垂直方向真实重叠 + 2px 容差，排除斜角）。
+- `world_map.gd` 新增房间裁剪：玩家房间 + 上下左右相邻房间内的 Checkpoint / Animal / Button 保持处理与显示；其它房间节点设为 `PROCESS_MODE_DISABLED` + 隐藏（不释放）；房间变化时切换，R 重置后立即重算；DoorTiles / DoorManager 保持全局。
+- `noise_field.gd` `sync_visibility()` 改为只遍历每个声场矩形覆盖到的格子范围（不再每物理帧扫描全部 5650 个噪音格）。
+- 测试：`keyboard_movement_checks` 76 → **79**（净空 lv1 / 零净空 lv2 / 2 秒寿命）；`big_map_checks` 30 → **40**（正交邻接、房间裁剪、远房间禁用且不释放、进入 Room4 后激活）；`spike_checks` 的 lv2 寿命断言改为 2 秒。七套 headless（本机 Godot 4.5.1）：79 + 40 + 38 + 19 + 7 + 8 + 17 全部通过。
+
+2026-11-14（顶头 lv2 / 贴墙发声场 / 存档点必须接触）
+
+- `player.gd`：新增 `_jump_start_y`；顶天花板时上升 **≤16px** → 发 `level = 2`、`landing_lv2_side_cells`、kind `ceiling` 的永续黄色波（世界/测试关对 level 2 设 `lifetime = INF`）；超过一格仍发 lv1 蓝色波。贴墙按 A/D 时用 `is_on_wall()` + 墙法线方向判定，按 `walk_wave_interval_tiles` 节奏累计预期位移并发出与走路相同的 lv0 step 波。
+- `world_map.gd`：删除 `room_camera.room_entered` 自动绑定与 `_bind_room_checkpoint()`；开局只把出生点/起始锚点记为回退，不点亮 Checkpoint；玩家实际 `body_entered` 接触 Checkpoint 后才更新存档点。没接触过时 R / 死亡回到出生点。
+- 测试：`keyboard_movement_checks` 72 → **76**（低天花板 lv2/永续、贴墙持续 step 波）；`big_map_checks` 29 → **30**（进房不绑定、接触才绑定）。七套 headless（Godot 4.5.1）：76 + 30 + 38 + 19 + 7 + 8 + 17 全部通过。
+
+2026-11-14（跳跃顶天花板触发 lv1 声场）
+
+- `player.gd`：在 `move_and_slide()` 前记录 `pre_velocity_y`；若上升中 `is_on_ceiling()` 为真，调用 `_emit_ceiling_wave()`，发出 `level = 1`、`side = landing_lv1_side_cells * TILE_SIZE`、`kind = "ceiling"` 的声场，与小跳落地 lv1 完全一致。
+- 每次向上碰撞只触发一次；撞墙 / 落地不触发；世界与测试关照常吸附网格、蓝色显示、震碎 lv1 玻璃、触发 lv1+ 按钮。
+- 测试：`keyboard_movement_checks` 67 → **72**（开阔起跳 / 撞墙不产生 ceiling 波、顶天花板恰好一次、等级 1、边长等于 lv1 配置）。七套 headless（本机 Godot 4.5.1）：72 + 38 + 29 + 19 + 7 + 8 + 17 全部通过（`door_animal_checks` 的动物可见性检查已随工作区改动修复）。
+
 2026-11-14（移植 CCCAT 按钮 + 谜题门）
 
 - 新增 `DoorButton`（`scripts/world/button.gd`，Area2D）与 `button_once.tscn` / `button_rebound.tscn`：触发改为 **lv1 及以上声场**与按钮 16×16 区域相交；删除 CCCAT 的朝向/踩踏逻辑，贴图 `assets/tiles/buttom.png` 2×2 帧（左灭 / 右亮，上行一次性 / 下行回弹）。

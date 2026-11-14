@@ -117,12 +117,20 @@ func _run() -> void:
 
 	var cp2 := _checkpoint_in_room(room2)
 	var target2: Vector2 = cp2.respawn_position() if cp2 != null else room2.get_rect().get_center()
+	var anchor_before: Vector2 = level.get_checkpoint_anchor()
+	level.player.reset_to(room2.get_rect().get_center())
+	await frames(10)
+	check(level.get_checkpoint_anchor().distance_to(anchor_before) < 0.5,
+		"Entering a room without touching its checkpoint keeps the old anchor")
 	level.player.reset_to(target2)
 	await frames(10)
-	check(level.get_checkpoint_room() == room2, "Entering the second room binds its checkpoint")
 	if cp2 != null:
+		check(level.get_checkpoint_room() == room2, "Touching the second room's checkpoint binds it")
 		check(level.get_checkpoint_anchor().distance_to(cp2.respawn_position()) < 0.5,
 			"Checkpoint anchor follows the second room's Checkpoint")
+	else:
+		check(level.get_checkpoint_anchor().distance_to(anchor_before) < 0.5,
+			"A room without a checkpoint leaves the old anchor")
 	await create_timer(0.8).timeout
 	check(camera.global_position.distance_to(room2.get_rect().get_center()) < 2.0,
 		"Camera tweens to the second room center")
@@ -169,6 +177,46 @@ func _run() -> void:
 	check(level.player.global_position.distance_to(level.get_checkpoint_anchor()) < 40.0,
 		"Death respawns at the checkpoint")
 	check(level.breakables.has_cell(1, c2), "Death restores the checkpoint room's glass")
+
+	# 6. 房间裁剪：只处理玩家房间 + 上下左右相邻房间的物体。
+	var room2_start: Room = level.get_node("Rooms/Room2")
+	var room1_west: Room = level.get_node("Rooms/Room1")
+	var room3_east: Room = level.get_node("Rooms/Room3")
+	var room4: Room = level.get_node("Rooms/Room4")
+	var room5: Room = level.get_node("Rooms/Room5")
+	var room6: Room = level.get_node("Rooms/Room6")
+	check(RoomRegistry.is_orthogonal_neighbor(room1_west.get_rect(), room2_start.get_rect()),
+		"Room1 and Room2 are orthogonal neighbors")
+	check(not RoomRegistry.is_orthogonal_neighbor(room3_east.get_rect(), room5.get_rect()),
+		"Room3 and Room5 are not orthogonal neighbors")
+	check(not RoomRegistry.is_orthogonal_neighbor(room4.get_rect(), room6.get_rect()),
+		"Room4 and Room6 are not orthogonal neighbors")
+
+	level.player.reset_to(room2_start.get_rect().get_center())
+	await frames(3)
+	var cp2_node := level.get_node("Objects/Checkpoint2") as Checkpoint
+	var cp1_node := level.get_node("Objects/Checkpoint1") as Checkpoint
+	var cp3_node := level.get_node("Objects/Checkpoint3") as Checkpoint
+	var cp7_node := level.get_node("Objects/Checkpoint7") as Checkpoint
+	check(cp2_node.process_mode != Node.PROCESS_MODE_DISABLED and cp2_node.is_visible_in_tree(),
+		"Checkpoint in the player's room stays active")
+	check(cp1_node.process_mode != Node.PROCESS_MODE_DISABLED
+		and cp3_node.process_mode != Node.PROCESS_MODE_DISABLED,
+		"Checkpoints in neighbor rooms stay active")
+	check(cp7_node.process_mode == Node.PROCESS_MODE_DISABLED and not cp7_node.is_visible_in_tree(),
+		"Checkpoints in far rooms are disabled and hidden")
+	check(is_instance_valid(cp7_node), "Far room objects are not freed")
+
+	level.player.reset_to(room4.get_rect().get_center())
+	await frames(3)
+	var cp4_node := level.get_node("Objects/Checkpoint4") as Checkpoint
+	var cp5_node := level.get_node("Objects/Checkpoint5") as Checkpoint
+	check(cp4_node.process_mode != Node.PROCESS_MODE_DISABLED,
+		"Checkpoint4 activates after entering Room4")
+	check(cp5_node.process_mode != Node.PROCESS_MODE_DISABLED,
+		"Checkpoint5 (neighbor above) stays active from Room4")
+	check(cp7_node.process_mode == Node.PROCESS_MODE_DISABLED,
+		"Checkpoint7 stays disabled from Room4")
 
 	level.noise.clear_all()
 	level.breakables.clear_all()

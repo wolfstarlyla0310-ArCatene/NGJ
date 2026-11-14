@@ -116,7 +116,8 @@ func _run() -> void:
 		if child is SoundField and child.level == 2 and child.emitter == level.player:
 			lv2_field = child
 			break
-	check(lv2_field != null and lv2_field.lifetime == INF, "World level-2 wave has infinite lifetime")
+	check(lv2_field != null and lv2_field.lifetime == SoundField.LV2_LIFETIME,
+		"World level-2 wave lasts 2 seconds")
 
 	level.reset_to_checkpoint()
 	await frames(2)

@@ -2,10 +2,11 @@ class_name SoundField
 extends Node2D
 ## 声场：方形扩散波的视觉效果。发出后 `expand_duration` 秒内从中心扩散到目标边长，
 ## 之后保持满框，并在 `lifetime` 秒生命周期内淡出。
-## `lifetime = INF` 表示常驻到重置（lv2 玩家落地波）。
+## lv2 玩家落地/顶头波使用 `LV2_LIFETIME`（2 秒）。
 ## 判定（玻璃/噪音/安全）仍按目标尺寸 `side_length` 立即生效，不随视觉扩散。
 
 const TILE_SIZE := 16.0
+const LV2_LIFETIME := 2.0
 
 @export var side_length: float = 96.0
 @export var lifetime: float = 0.5

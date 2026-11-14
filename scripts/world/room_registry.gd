@@ -36,3 +36,32 @@ static func room_of_cell(rooms: Array, terrain: TileMapLayer, cell: Vector2i) ->
 	if terrain == null:
 		return null
 	return room_at(rooms, terrain.to_global(terrain.map_to_local(cell)))
+
+
+## 两个矩形是否上下/左右相邻（不把斜角算进来）。
+## 房间之间常有 0.4~1.2px 的缝隙，默认容差 2px。
+static func is_orthogonal_neighbor(a: Rect2, b: Rect2, tolerance := 2.0) -> bool:
+	var x_gap := maxf(a.position.x, b.position.x) - minf(a.end.x, b.end.x)
+	var y_gap := maxf(a.position.y, b.position.y) - minf(a.end.y, b.end.y)
+	# 左右相邻：y 有真实重叠，x 间隙很小。
+	if y_gap < 0.0 and absf(x_gap) <= tolerance:
+		return true
+	# 上下相邻：x 有真实重叠，y 间隙很小。
+	if x_gap < 0.0 and absf(y_gap) <= tolerance:
+		return true
+	return false
+
+
+## 某个房间的上下左右相邻房间（不含自身与斜角）。
+static func orthogonal_neighbors(rooms: Array, room: Room, tolerance := 2.0) -> Array[Room]:
+	var result: Array[Room] = []
+	if room == null:
+		return result
+	var rect := room.get_rect()
+	for other in rooms:
+		var r := other as Room
+		if r == null or r == room:
+			continue
+		if is_orthogonal_neighbor(rect, r.get_rect(), tolerance):
+			result.append(r)
+	return result

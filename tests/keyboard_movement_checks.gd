@@ -116,6 +116,101 @@ func _run() -> void:
 	check(jump_sides.size() >= 1 and absf(jump_sides[0] - lv1_side) < 0.01, "Jump landing emits the configured lv1 side (%.0f px)" % lv1_side)
 	check(jump_levels.size() >= 1 and jump_levels[0] == 1, "Jump landing is a level-1 sound field")
 	check(level.player.is_on_floor() and absf(level.player.position.y - ground_y) < 1.0, "Landing sonar does not bounce the player")
+	check(count_waves("ceiling") == 0, "Open-air jump emits no ceiling wave")
+
+	# 1b. Jumping into a ceiling emits one lv1 blue wave.
+	level.restart_run()
+	await settle()
+	var ceiling := StaticBody2D.new()
+	ceiling.collision_layer = 1
+	ceiling.collision_mask = 0
+	var ceiling_shape := CollisionShape2D.new()
+	var ceiling_rect := RectangleShape2D.new()
+	ceiling_rect.size = Vector2(64, 16)
+	ceiling_shape.shape = ceiling_rect
+	ceiling.add_child(ceiling_shape)
+	level.add_child(ceiling)
+	ceiling.global_position = Vector2(level.player.global_position.x, ground_y - 40.0)
+	await frames(2)
+	clear_records()
+	Input.action_press("jump")
+	await frames(2)
+	Input.action_release("jump")
+	await frames(60)
+	var ceiling_levels := wave_levels("ceiling")
+	var ceiling_sides := wave_sides("ceiling")
+	check(count_waves("ceiling") == 1, "Jumping into a ceiling emits exactly one ceiling wave")
+	check(ceiling_levels.size() == 1 and ceiling_levels[0] == 1,
+		"Ceiling wave is a level-1 sound field")
+	check(ceiling_sides.size() == 1 and absf(ceiling_sides[0] - lv1_side) < 0.01,
+		"Ceiling wave uses the configured lv1 side (%.0f px)" % lv1_side)
+	ceiling.queue_free()
+	await frames(2)
+
+	# 1c. A ceiling with headroom still emits lv1.
+	level.restart_run()
+	await settle()
+	var low_ceiling := StaticBody2D.new()
+	low_ceiling.collision_layer = 1
+	low_ceiling.collision_mask = 0
+	var low_shape := CollisionShape2D.new()
+	var low_rect := RectangleShape2D.new()
+	low_rect.size = Vector2(64, 16)
+	low_shape.shape = low_rect
+	low_ceiling.add_child(low_shape)
+	level.add_child(low_ceiling)
+	low_ceiling.global_position = Vector2(level.player.global_position.x, ground_y - 24.0)
+	await frames(2)
+	clear_records()
+	Input.action_press("jump")
+	await frames(2)
+	Input.action_release("jump")
+	await frames(40)
+	var low_levels := wave_levels("ceiling")
+	var low_sides := wave_sides("ceiling")
+	check(count_waves("ceiling") == 1, "Low-ceiling bump emits exactly one ceiling wave")
+	check(low_levels.size() == 1 and low_levels[0] == 1,
+		"Ceiling with headroom is a level-1 sound field")
+	check(low_sides.size() == 1 and absf(low_sides[0] - lv1_side) < 0.01,
+		"Ceiling with headroom uses the configured lv1 side (%.0f px)" % lv1_side)
+	low_ceiling.queue_free()
+	await frames(2)
+
+	# 1d. Jumping with zero headroom emits a 2-second lv2 wave.
+	level.restart_run()
+	await settle()
+	var zero_ceiling := StaticBody2D.new()
+	zero_ceiling.collision_layer = 1
+	zero_ceiling.collision_mask = 0
+	var zero_shape := CollisionShape2D.new()
+	var zero_rect := RectangleShape2D.new()
+	zero_rect.size = Vector2(64, 16)
+	zero_shape.shape = zero_rect
+	zero_ceiling.add_child(zero_shape)
+	level.add_child(zero_ceiling)
+	zero_ceiling.global_position = Vector2(level.player.global_position.x, ground_y - 13.0)
+	await frames(2)
+	clear_records()
+	Input.action_press("jump")
+	await frames(2)
+	Input.action_release("jump")
+	await frames(40)
+	var zero_levels := wave_levels("ceiling")
+	var zero_sides := wave_sides("ceiling")
+	check(count_waves("ceiling") == 1, "Zero-headroom bump emits exactly one ceiling wave")
+	check(zero_levels.size() == 1 and zero_levels[0] == 2,
+		"Zero-headroom bump is a level-2 sound field")
+	check(zero_sides.size() == 1 and absf(zero_sides[0] - lv2_side) < 0.01,
+		"Zero-headroom wave uses the configured lv2 side (%.0f px)" % lv2_side)
+	var lv2_ceiling: SoundField = null
+	for child in level.sound_fields.get_children():
+		if child is SoundField and child.level == 2:
+			lv2_ceiling = child
+			break
+	check(lv2_ceiling != null and lv2_ceiling.lifetime == SoundField.LV2_LIFETIME,
+		"Zero-headroom wave lasts 2 seconds")
+	zero_ceiling.queue_free()
+	await frames(2)
 
 	# 2. Drop tiers: 1 -> lv0/96, 2-3 -> lv1/160, 4 -> lv2/224.
 	clear_records()
@@ -148,8 +243,8 @@ func _run() -> void:
 			lv2_field = child
 			break
 	check(lv2_field != null, "128 px drop leaves a level-2 sound field on the map")
-	check(lv2_field != null and lv2_field.lifetime == INF and not lv2_field.persistent,
-		"Level-2 field has infinite lifetime and is not persistent")
+	check(lv2_field != null and lv2_field.lifetime == SoundField.LV2_LIFETIME and not lv2_field.persistent,
+		"Level-2 field lasts 2 seconds and is not persistent")
 
 	clear_records()
 	level.player.reset_to(Vector2(900, ground_y - 8.0))
@@ -218,7 +313,8 @@ func _run() -> void:
 	Input.action_release("move_left")
 	check(absf(level.player.position.x - contact_x) <= 1.0, "Walking into the wall stops at the collision boundary")
 	check(count_waves("landing") == 0, "Walking into a wall emits no landing sound field")
-	check(count_waves("step") == 2, "Walking into a wall only emits its normal step sound fields")
+	check(count_waves("step") >= 4, "Pressing into a wall keeps emitting step sound fields")
+	check(count_waves("ceiling") == 0, "Walking into a wall emits no ceiling wave")
 
 	# 5. Double-tapping a direction gains no extra speed.
 	level.restart_run()

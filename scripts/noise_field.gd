@@ -36,18 +36,23 @@ func touches_rect(world_rect: Rect2) -> bool:
 	return false
 
 func sync_visibility(pulse_rects: Array[Rect2]) -> void:
-	for cell in _painted:
-		var cell_rect := _cell_rect(cell)
-		var covered := false
-		for area in pulse_rects:
-			# 只有被单个声场完整包住（含边线）的格子才隐藏。
-			if area.encloses(cell_rect):
-				covered = true
-				break
-		if covered and not _hidden.has(cell):
+	# 只遍历每个声场矩形覆盖到的格子，避免每物理帧扫描整张噪音图。
+	var covered: Dictionary = {}
+	for area in pulse_rects:
+		var a := local_to_map(to_local(area.position))
+		var b := local_to_map(to_local(area.end))
+		for x in range(mini(a.x, b.x), maxi(a.x, b.x) + 1):
+			for y in range(mini(a.y, b.y), maxi(a.y, b.y) + 1):
+				var cell := Vector2i(x, y)
+				# 只有被单个声场完整包住（含边线）的已绘制格子才隐藏。
+				if _painted.has(cell) and area.encloses(_cell_rect(cell)):
+					covered[cell] = true
+	for cell in covered:
+		if not _hidden.has(cell):
 			erase_cell(cell)
 			_hidden[cell] = true
-		elif not covered and _hidden.has(cell):
+	for cell in _hidden.keys():
+		if not covered.has(cell):
 			var data: Dictionary = _painted[cell]
 			set_cell(cell, int(data["source"]), data["atlas"], int(data["alternative"]))
 			_hidden.erase(cell)

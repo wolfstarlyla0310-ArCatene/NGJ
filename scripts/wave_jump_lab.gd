@@ -71,7 +71,7 @@ func _on_wave(origin: Vector2, side: float, level: int, _kind: String) -> void:
 	field.emitter = player
 	field.color = SoundField.color_for_level(level)
 	if level == 2:
-		field.lifetime = INF  # 大跳常驻；reset 时按非 persistent 清除
+		field.lifetime = SoundField.LV2_LIFETIME  # lv2 持续 2 秒
 	sound_fields.add_child(field)
 	field.global_position = snapped_origin
 	var half := Vector2(side, side) * 0.5

@@ -28,6 +28,8 @@ var _checkpoint_room: Room = null
 var _active_checkpoint: Checkpoint = null
 var _checkpoints: Array[Checkpoint] = []
 var _grace_remaining := GRACE_SECONDS
+## 当前按房间裁剪所依据的玩家房间；房间不变时不做任何遍历。
+var _culled_room: Room = null
 
 func _ready() -> void:
 	process_physics_priority = 100
@@ -35,20 +37,21 @@ func _ready() -> void:
 	player.wave_emitted.connect(_on_wave)
 	player.controls_enabled = true
 	_collect_checkpoints()
-	room_camera.room_entered.connect(_on_room_entered)
 
 	var explicit_start := _is_explicit_start_room()
 	var spawn_room: Room = start_room if explicit_start else _room_of(player.global_position)
 	if spawn_room == null:
 		spawn_room = _first_room()
+	# 存档点必须实际接触才更新；开局只记录出生点/起始锚点作为回退。
 	if explicit_start and spawn_room != null:
 		var anchor := _spawn_anchor(spawn_room)
 		player.reset_to(anchor)
-		_bind_room_checkpoint(spawn_room, anchor)
+		_set_checkpoint(spawn_room, anchor, null)
 	else:
-		_bind_room_checkpoint(spawn_room, player.global_position)
+		_set_checkpoint(spawn_room, player.global_position, null)
 	if puzzle_door_manager != null:
 		puzzle_door_manager.setup(get_rooms())
+	_update_room_culling(true)
 
 func _is_explicit_start_room() -> bool:
 	return start_room != null and is_instance_valid(start_room) \
@@ -61,6 +64,7 @@ func _spawn_anchor(room: Room) -> Vector2:
 	return room.get_rect().get_center()
 
 func _physics_process(delta: float) -> void:
+	_update_room_culling()
 	var player_rect := _player_rect()
 	if _touching_lethal_field(player_rect) or spikes.touches_rect(player_rect):
 		_die()
@@ -87,7 +91,7 @@ func _on_wave(origin: Vector2, side: float, level: int, _kind: String) -> void:
 	field.emitter = player
 	field.color = SoundField.color_for_level(level)
 	if level == 2:
-		field.lifetime = INF  # 大跳常驻；R / 死亡重置时按非 persistent 清除
+		field.lifetime = SoundField.LV2_LIFETIME  # lv2 持续 2 秒
 	sound_fields.add_child(field)
 	field.global_position = snapped_origin
 	var half := Vector2(side, side) * 0.5
@@ -139,11 +143,6 @@ func _walk_checkpoints(node: Node) -> void:
 					checkpoint.touched.connect(_on_checkpoint_touched)
 		_walk_checkpoints(child)
 
-func _on_room_entered(room: Room) -> void:
-	if room == null or not is_instance_valid(room):
-		return
-	_bind_room_checkpoint(room, player.global_position)
-
 func _on_checkpoint_touched(checkpoint: Checkpoint) -> void:
 	if checkpoint == null or not is_instance_valid(checkpoint):
 		return
@@ -151,15 +150,6 @@ func _on_checkpoint_touched(checkpoint: Checkpoint) -> void:
 	if room == null:
 		return
 	_set_checkpoint(room, checkpoint.respawn_position(), checkpoint)
-
-func _bind_room_checkpoint(room: Room, fallback_position: Vector2) -> void:
-	if room == null:
-		return
-	var checkpoint := _checkpoint_in_room(room)
-	var anchor := fallback_position
-	if checkpoint != null:
-		anchor = checkpoint.respawn_position()
-	_set_checkpoint(room, anchor, checkpoint)
 
 func _set_checkpoint(room: Room, anchor: Vector2, checkpoint: Checkpoint) -> void:
 	if room == null:
@@ -197,6 +187,8 @@ func reset_to_checkpoint() -> void:
 			field.queue_free()
 	noise.sync_visibility([])
 	player.reset_to(_checkpoint_position)
+	_culled_room = null
+	_update_room_culling(true)
 	_grace_remaining = GRACE_SECONDS
 	if room != null:
 		for door in get_tree().get_nodes_in_group("door"):
@@ -258,6 +250,45 @@ func _spawn_death_field(world_position: Vector2) -> void:
 
 func _room_of(world_point: Vector2) -> Room:
 	return room_at(world_point)
+
+## —— 房间裁剪：只让玩家房间 + 上下左右相邻房间里的物体参与处理/渲染 ——
+
+func _update_room_culling(force := false) -> void:
+	var here := _room_of(player.global_position)
+	if here == null:
+		# 站在房间缝隙里：保持上一次的 active 集合，避免边界闪烁。
+		return
+	if not force and here == _culled_room:
+		return
+	_culled_room = here
+	var active_rooms := RoomRegistry.orthogonal_neighbors(get_rooms(), here)
+	active_rooms.append(here)
+	var managed: Array[Node] = []
+	for container_name in ["Objects", "Animals", "Buttons"]:
+		var container := get_node_or_null(container_name)
+		if container != null:
+			_collect_managed_nodes(container, managed)
+	for node in managed:
+		if not is_instance_valid(node) or node.is_queued_for_deletion():
+			continue
+		var node_2d := node as Node2D
+		if node_2d == null:
+			continue
+		var node_room := _room_of(node_2d.global_position)
+		var active := node_room == null or active_rooms.has(node_room)
+		node.process_mode = Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
+		if node is CanvasItem:
+			(node as CanvasItem).visible = active
+		if node is Checkpoint:
+			(node as Checkpoint).set_deferred("monitoring", active)
+
+func _collect_managed_nodes(node: Node, out: Array[Node]) -> void:
+	for child in node.get_children():
+		if child.is_queued_for_deletion():
+			continue
+		if child is Checkpoint or child is Animal or child is DoorButton:
+			out.append(child)
+		_collect_managed_nodes(child, out)
 
 func _first_room() -> Room:
 	var rooms := get_rooms()
