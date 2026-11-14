@@ -1,0 +1,10 @@
+[gd_resource type="TileSet" format=3 uid="uid://4541di8lxr7x"]
+
+[ext_resource type="Texture2D" uid="uid://ddyr8pr2dbqat" path="res://assets/tiles/spike_tile.svg" id="1_texture"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_spike"]
+texture = ExtResource("1_texture")
+0:0/0 = 0
+
+[resource]
+sources/0 = SubResource("TileSetAtlasSource_spike")

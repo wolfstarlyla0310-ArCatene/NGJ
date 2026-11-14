@@ -24,7 +24,7 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 
 ## 声场等级
 
-声场在发出后的 **0.1 秒内从中心快速扩散到目标边长**，之后保持满框，存在 **0.5 秒**并淡出；不会推动任何物体。扩散只影响视觉表现，玻璃破碎/噪音隐藏/安全判定仍按目标尺寸在发出瞬间生效。
+声场在发出后的 **`expand_duration`（当前 0.2 秒）内从中心快速扩散到目标边长**，之后保持满框，存在 **0.5 秒**并淡出；不会推动任何物体。扩散只影响视觉表现，玻璃破碎/噪音隐藏/安全判定仍按目标尺寸在发出瞬间生效。
 
 | 来源 | 等级 | 边长 |
 |---|---|---|
@@ -48,6 +48,14 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 - 使用 **0.1 秒宽限**：在噪音外或声场内时计时重置为 0.1 秒；在噪音内且不在声场内时递减，归零即死亡。
 - 声场覆盖到的红色噪音格会暂时隐藏，声场消失后恢复显示。
 - 死亡 = 回到存档点 + 重置存档点房间，噪音绘制保留，死亡计数 +1。
+
+## 刺图格
+
+- 刺是普通 TileMapLayer：在 `Spikes` 层用 `spike_tileset.tres` 直接绘制/刷。图块在编辑器里显示为红色叉/方框，方便摆放；**运行时整个 `Spikes` 层隐藏**，所以图格本身没有贴图，只留下它发出的红色声场。
+- 每个刺格每 **1 秒**触发一轮，连续发射 **3 个红色短声场**（间隔 0.1 秒，单个存在 0.2 秒，边长 3 格 = 48px）。
+- 刺声场与玩家声场的扩散/淡出表现一致，但为红色且**致命**：玩家身体碰到红色声场立刻死亡。
+- 刺声场会按等级 1 震碎范围内的 lv1 玻璃；不提供噪音免疫、也不隐藏噪音。
+- 玩家死亡时（刺或噪音），死亡位置会额外发出一个**红色、边长 5 格 = 80px** 的声场，纯视觉、不致死。
 
 ## 正式大地图与房间
 
@@ -83,11 +91,13 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | `scenes/levels/wave_jump_lab.tscn` | 机制测试关 |
 | `scripts/wave_jump_lab.gd` | 测试关的 R、声场生成、噪音生存、鼠标传送 |
 | `scripts/player.gd` | 移动、跳跃、分级声场（玩家本体不绘制） |
-| `scripts/sound_field.gd` | 声场视觉效果（0.1 秒中心扩散 + 0.5 秒淡出） |
+| `scripts/sound_field.gd` | 声场视觉效果（中心扩散 + 0.5 秒淡出；白色安全 / 红色致命） |
+| `scripts/world/spike_field.gd` | 刺图格层：定期发射 3 连发红色致命短声场 |
 | `scripts/breakables.gd` | 图格绘制转碰撞、同级声场震碎、按房间恢复 |
 | `scripts/noise_field.gd` | 红色绘制转噪音区域 |
 | `resources/whitebox_tileset.tres` | 16×16、47 格黑白 blob 地形图集，含完整物理层 |
 | `resources/lv1_tileset.tres`、`lv2_tileset.tres`、`noise_tileset.tres` | 玻璃与噪音瓦片集 |
+| `resources/spike_tileset.tres`、`assets/tiles/spike_tile.svg` | 刺图格的编辑器可见标记（运行时刺层隐藏） |
 
 跳跃高度与行走发波间隔在 `scripts/player.gd` 的 `jump_height_tiles`、`walk_wave_interval_tiles` 中调整；声场等级与边长在 `WAVE_SIDE_TILES` 中定义（16px 格）。
 
@@ -98,10 +108,12 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 ```powershell
 godot --headless --path . --script res://tests/keyboard_movement_checks.gd
 godot --headless --path . --script res://tests/big_map_checks.gd
+godot --headless --path . --script res://tests/spike_checks.gd
 ```
 
 - `keyboard_movement_checks.gd`：46 项，覆盖跳跃、声场等级与边长、走路/撞墙、玻璃破碎与恢复、噪音、调试传送。
-- `big_map_checks.gd`：21 项，覆盖玩家无可见本体、房间、相机切关、声场 0.1 秒扩散、进房存档点绑定、单房间 R、噪音死亡回存档点。
+- `big_map_checks.gd`：21 项，覆盖玩家无可见本体、房间、相机切关、声场扩散、进房存档点绑定、单房间 R、噪音死亡回存档点。
+- `spike_checks.gd`：13 项，覆盖刺层存在、3 连发红色致命声场、边长 48px、碎 lv1 玻璃、接触死亡、死亡发出 80px 红色声场。
 
 ## 协作与原型范围
 

@@ -55,14 +55,16 @@ func _run() -> void:
 	check(absf(camera.zoom.x - _fit_zoom(room1, viewport_size)) < 0.02,
 		"Camera zooms to fit the first room")
 
-	# 3. 声场视觉：0.1 秒内从中心扩到目标边长（判定仍是满尺寸，不随视觉变化）。
+	# 3. 声场视觉：在 expand_duration 内从中心扩到目标边长（判定仍是满尺寸，不随视觉变化）。
 	var field := SoundField.new()
 	field.side_length = 96.0
 	level.sound_fields.add_child(field)
 	await frames(2)
 	check(field.current_side > 0.0 and field.current_side < 96.0, "Sound field expands from the center")
-	await frames(12)
-	check(absf(field.current_side - 96.0) < 0.5, "Sound field reaches target size in 0.1 s")
+	var expand_frames := int(ceil(field.expand_duration * float(Engine.physics_ticks_per_second))) + 2
+	await frames(expand_frames)
+	check(absf(field.current_side - 96.0) < 0.5,
+		"Sound field reaches target size in %.2f s" % field.expand_duration)
 	field.queue_free()
 
 	# 4. 两间房各放一块玻璃，打碎后进入第二间房按 R：只还原第二间。

@@ -1,10 +1,19 @@
 # 验证记录
 
+2026-11-14（刺图格与致命红色声场）
+
+- 新增 `resources/spike_tileset.tres`（16×16 图块，编辑器可见、运行时隐藏）与 `scripts/world/spike_field.gd`（`@tool` TileMapLayer）：可直接在 `Spikes` 层绘制刺格；每个刺格每 1 秒触发一轮、3 连发红色短声场（间隔 0.1 秒、单个 0.2 秒、边长 3 格 = 48px）。
+- 刺声场按等级 1 震碎范围内的 lv1 玻璃；图块在编辑器里显示为红色叉/方框，运行时整个 `Spikes` 层隐藏（图格无贴图）。
+- `SoundField` 新增 `color` / `lethal` / `safe_for_player` / `get_rect()`：玩家白色声场保持安全；刺声场红色、致命、非安全区。
+- `WorldMap`：玩家身体矩形接触致命声场立即死亡；死亡后回存档点，并在死亡位置发出边长 5 格 = 80px 的红色纯视觉声场；噪音安全/隐藏只统计 `safe_for_player` 声场。
+- 房间编辑器新增 `Spikes.sound_fields` / `Spikes.breakables` 接线校验。
+- 测试：新增 `tests/spike_checks.gd` 13 项；`big_map_checks.gd` 的扩散检查改为按 `expand_duration` 等待。三套 headless 结果：46 + 21 + 13 全部通过。
+
 2026-11-14（声场扩散视觉）
 
-- [scripts/sound_field.gd](scripts/sound_field.gd)：新增 `expand_duration = 0.1s`，方框从中心 ease-out 扩散到目标边长，之后保持满框并在 0.5 秒生命周期内淡出。
+- [scripts/sound_field.gd](scripts/sound_field.gd)：新增 `expand_duration`（当前 0.2s），方框从中心 ease-out 扩散到目标边长，之后保持满框并在 0.5 秒生命周期内淡出。
 - 扩散**只影响视觉**：`contains_point()` 与世界脚本里的 `_active_sound_field_rects()` 仍用目标 `side_length`，玻璃/噪音/安全判定不变。
-- 测试：`tests/big_map_checks.gd` 新增两项扩散状态检查（生成 2 帧后 `current_side ∈ (0, 96)`，0.1 秒后 ≈ 96）。
+- 测试：`tests/big_map_checks.gd` 新增两项扩散状态检查（生成 2 帧后 `current_side ∈ (0, 96)`，按 `expand_duration` 等待后 ≈ 96）。
 - 同步当前工作区调整：玩家碰撞体 16×16、跳跃高度按 `jump_height_tiles` 计算（当前 6 格 / 96px），测试按 `jump_height_tiles × 16` 校验跳跃顶点、撞墙 `contact_x = 136`；大地图测试改为从当前场景动态读取房间/存档点/相机，避免绑定具体关卡内容。
 - headless：`keyboard_movement_checks.gd` 46 项、`big_map_checks.gd` 21 项全部通过。
 

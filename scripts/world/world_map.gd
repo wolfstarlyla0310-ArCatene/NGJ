@@ -36,6 +36,9 @@ func _ready() -> void:
 	_bind_room_checkpoint(start_room, player.global_position)
 
 func _physics_process(delta: float) -> void:
+	if _touching_lethal_field():
+		_die()
+		return
 	noise.sync_visibility(_active_sound_field_rects())
 	var center := player.global_position
 	if not noise.has_point(center) or _inside_active_sound_field(center):
@@ -43,8 +46,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_grace_remaining = maxf(0.0, _grace_remaining - delta)
 	if _grace_remaining <= 0.0:
-		deaths += 1
-		reset_to_checkpoint()
+		_die()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(RESET_ACTION) and not event.is_echo():
@@ -166,16 +168,48 @@ func reset_to_checkpoint() -> void:
 func _active_sound_field_rects() -> Array[Rect2]:
 	var rects: Array[Rect2] = []
 	for child in sound_fields.get_children():
-		if child is SoundField and not child.is_queued_for_deletion():
-			var side: float = child.side_length
-			rects.append(Rect2(child.global_position - Vector2(side, side) * 0.5, Vector2(side, side)))
+		if child is SoundField and not child.is_queued_for_deletion() and child.safe_for_player:
+			rects.append(child.get_rect())
 	return rects
 
 func _inside_active_sound_field(point: Vector2) -> bool:
 	for child in sound_fields.get_children():
-		if child is SoundField and not child.is_queued_for_deletion() and child.contains_point(point):
+		if child is SoundField and not child.is_queued_for_deletion() \
+				and child.safe_for_player and child.contains_point(point):
 			return true
 	return false
+
+func _touching_lethal_field() -> bool:
+	var player_rect := _player_rect()
+	for child in sound_fields.get_children():
+		if child is SoundField and not child.is_queued_for_deletion() \
+				and child.lethal and child.get_rect().intersects(player_rect):
+			return true
+	return false
+
+func _player_rect() -> Rect2:
+	var shape := player.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if shape != null and shape.shape is RectangleShape2D:
+		var size: Vector2 = (shape.shape as RectangleShape2D).size
+		return Rect2(player.global_position - size * 0.5, size)
+	return Rect2(player.global_position - Vector2(8, 8), Vector2(16, 16))
+
+## 玩家死亡：先记下死亡位置，重置到存档点，再在原死亡位置放一个红色死亡声场（纯视觉）。
+func _die() -> void:
+	var death_position := player.global_position
+	deaths += 1
+	reset_to_checkpoint()
+	_spawn_death_field(death_position)
+
+func _spawn_death_field(world_position: Vector2) -> void:
+	var field := SoundField.new()
+	field.side_length = 80.0
+	field.lifetime = 0.5
+	field.color = Color(1.0, 0.2, 0.2, 1.0)
+	field.lethal = false
+	field.safe_for_player = false
+	sound_fields.add_child(field)
+	field.global_position = world_position
 
 ## —— 工具 ——
 
