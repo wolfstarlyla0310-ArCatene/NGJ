@@ -17,8 +17,8 @@ extends TileMapLayer
 ## 两轮之间的间隔（秒）。
 @export var cycle_interval := 1.0
 @export var field_color := Color(1.0, 0.2, 0.2, 1.0)
-## 刺声场震碎的玻璃等级。
-@export var glass_level := 1
+## 刺声场震碎的玻璃等级；0 = 不震碎玻璃（lv0）。
+@export var glass_level := 0
 
 var _cycle_elapsed := 0.0
 var _burst_left := 0

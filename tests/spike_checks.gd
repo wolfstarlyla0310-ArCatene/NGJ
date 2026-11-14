@@ -59,7 +59,7 @@ func _run() -> void:
 		check(absf(field.side_length - 48.0) < 0.01, "Spike field side length is 48 px (3 cells)")
 		check(field.color.r > 0.9 and field.color.g < 0.4, "Spike field is red")
 		check(not field.safe_for_player, "Spike field is not a player-safe zone")
-	check(not level.breakables.has_cell(1, glass_cell), "Spike field breaks lv1 glass")
+	check(level.breakables.has_cell(1, glass_cell), "Spike field is lv0 and leaves glass intact")
 
 	# 停掉连发、清掉现有刺声场，再单独测试接触死亡。
 	spikes.cycle_interval = 1000.0

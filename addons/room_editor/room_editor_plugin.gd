@@ -252,6 +252,13 @@ func _on_validate_pressed() -> void:
 		if spikes.get("breakables") == null:
 			problems.append("Spikes.breakables 没有接线（请指向 Breakables）。")
 
+	var triggers := _find_node_by_name(root, "Triggers", "TileMapLayer")
+	if triggers != null:
+		if triggers.get("player") == null:
+			problems.append("Triggers.player 没有接线（请指向 Player）。")
+		if triggers.get("sound_fields") == null:
+			problems.append("Triggers.sound_fields 没有接线（请指向 SoundFields 容器）。")
+
 	if player is Node2D and not rooms.is_empty():
 		if RoomRegistry.room_at(rooms, (player as Node2D).global_position) == null:
 			problems.append("玩家不在任何房间内 —— 开局相机找不到取景房间。")

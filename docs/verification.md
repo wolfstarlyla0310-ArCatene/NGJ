@@ -1,9 +1,23 @@
 # 验证记录
 
+2026-11-14（触发方块仅编辑器可见；玩家声场 3/5 格）
+
+- `TriggerField._ready()` 设置 `visible = Engine.is_editor_hint()`：编辑器里显示青色触发图块，运行时整个 `Triggers` 层隐藏（图格本身无贴图）。
+- `player.gd` 移除 `WAVE_SIDE_TILES`，新增 `walk_wave_side_cells = 3`、`jump_wave_side_cells = 5`（Player 检查器可调）：走路声场 48px / lv0；落地声场统一 80px，等级仍按落差 lv0/lv1/lv2。
+- 测试适配：边长断言改为读取导出值；玻璃测试格改为 `(54,31)` / `(57,31)` 避开玩家下落路径；噪音隐藏检查格改为 `(24,33)`；`trigger_checks.gd` 增加运行时隐藏检查（8 项）。
+- 四套 headless 结果：46 + 21 + 13 + 8 全部通过。
+
+2026-11-14（触发方块；刺声场改为 lv0）
+
+- 新增 `resources/trigger_tileset.tres`、`assets/tiles/trigger_tile.svg` 与 `scripts/world/trigger_field.gd`：无碰撞、可直接在 `Triggers` 层绘制；玩家站在触发格上每 0.5 秒发出一次白色 48px 安全声场，不震碎玻璃。
+- 大地图新增 `Triggers` 层并接线 `player` / `sound_fields`；房间编辑器新增这两条接线校验。
+- `SpikeField.glass_level` 默认改为 0：红色刺声场不再震碎玻璃；`spike_checks.gd` 对应改为验证玻璃保持完整。
+- 新增 `tests/trigger_checks.gd` 7 项。四套 headless 结果：46 + 21 + 13 + 7 全部通过。
+
 2026-11-14（刺图格与致命红色声场）
 
 - 新增 `resources/spike_tileset.tres`（16×16 图块，编辑器可见、运行时隐藏）与 `scripts/world/spike_field.gd`（`@tool` TileMapLayer）：可直接在 `Spikes` 层绘制刺格；每个刺格每 1 秒触发一轮、3 连发红色短声场（间隔 0.1 秒、单个 0.2 秒、边长 3 格 = 48px）。
-- 刺声场按等级 1 震碎范围内的 lv1 玻璃；图块在编辑器里显示为红色叉/方框，运行时整个 `Spikes` 层隐藏（图格无贴图）。
+- 刺声场按 lv0 处理、不震碎玻璃；图块在编辑器里显示为红色叉/方框，运行时整个 `Spikes` 层隐藏（图格无贴图）。
 - `SoundField` 新增 `color` / `lethal` / `safe_for_player` / `get_rect()`：玩家白色声场保持安全；刺声场红色、致命、非安全区。
 - `WorldMap`：玩家身体矩形接触致命声场立即死亡；死亡后回存档点，并在死亡位置发出边长 5 格 = 80px 的红色纯视觉声场；噪音安全/隐藏只统计 `safe_for_player` 声场。
 - 房间编辑器新增 `Spikes.sound_fields` / `Spikes.breakables` 接线校验。

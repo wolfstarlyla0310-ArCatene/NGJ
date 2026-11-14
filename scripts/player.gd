@@ -5,7 +5,6 @@ signal wave_emitted(origin: Vector2, side_pixels: float, level: int, kind: Strin
 
 const TILE_SIZE: float = 16.0
 const CONTACT_TOLERANCE_PIXELS: float = 0.5
-const WAVE_SIDE_TILES := [6, 10, 14]  # lv0, lv1, lv2（16px 格：96 / 160 / 224 像素）
 
 @export var speed: float = 250.0
 @export var acceleration: float = 1800.0
@@ -15,6 +14,10 @@ const WAVE_SIDE_TILES := [6, 10, 14]  # lv0, lv1, lv2（16px 格：96 / 160 / 22
 @export var coyote_time: float = 0.12
 @export var jump_buffer: float = 0.12
 @export var walk_wave_interval_tiles: float = 2.0
+## 走路声场边长（格）；当前 3 格 = 48 像素。
+@export var walk_wave_side_cells: float = 3.0
+## 跳跃/落地声场边长（格）；当前 5 格 = 80 像素。
+@export var jump_wave_side_cells: float = 5.0
 
 var controls_enabled: bool = false:
 	set(value):
@@ -72,7 +75,7 @@ func _emit_landing_wave() -> void:
 		level = 2
 	elif tiles >= 4:
 		level = 1
-	wave_emitted.emit(global_position, float(WAVE_SIDE_TILES[level]) * TILE_SIZE, level, "landing")
+	wave_emitted.emit(global_position, jump_wave_side_cells * TILE_SIZE, level, "landing")
 
 func _emit_step_waves(was_grounded: bool, pre_x: float) -> void:
 	var moved := absf(global_position.x - pre_x)
@@ -88,7 +91,7 @@ func _emit_step_waves(was_grounded: bool, pre_x: float) -> void:
 	_walk_wave_distance += moved
 	while _walk_wave_distance >= interval:
 		_walk_wave_distance -= interval
-		wave_emitted.emit(global_position, float(WAVE_SIDE_TILES[0]) * TILE_SIZE, 0, "step")
+		wave_emitted.emit(global_position, walk_wave_side_cells * TILE_SIZE, 0, "step")
 
 func reset_to(point: Vector2) -> void:
 	global_position = point
