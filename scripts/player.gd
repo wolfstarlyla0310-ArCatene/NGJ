@@ -21,7 +21,7 @@ const CEILING_PROBE_PIXELS: float = 3.0
 ## lv1 落地声场边长（格）；2 < 落差 ≤ 6 格，当前 5 格 = 80 像素。
 @export var landing_lv1_side_cells: float = 6.0
 ## lv2 落地声场边长（格）；落差 > 6 格，当前 7 格 = 112 像素。
-@export var landing_lv2_side_cells: float = 10.0
+@export var landing_lv2_side_cells: float = 8.0
 ## 到达跳跃最高点后额外滞空的时间（秒）。
 @export var apex_hover_time := 0.0
 

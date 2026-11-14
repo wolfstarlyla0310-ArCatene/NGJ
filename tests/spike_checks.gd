@@ -80,8 +80,9 @@ func _run() -> void:
 	level.player.reset_to(spike_world)
 	await frames(20)
 	check(level.deaths > deaths_before, "Touching the spike cell kills the player")
-	check(level.player.global_position.distance_to(level.get_checkpoint_anchor()) < 40.0,
-		"Spike death respawns at the checkpoint")
+	check(level.is_dead(), "Spike death waits for R before resetting")
+	check(level.player.global_position.distance_to(level.get_checkpoint_anchor()) > 40.0,
+		"Spike death does not respawn immediately")
 
 	var death_fields: Array = []
 	for child in sound_fields.get_children():
@@ -93,6 +94,12 @@ func _run() -> void:
 		var death_field: SoundField = death_fields[0]
 		check(death_field.color.r > 0.9 and death_field.color.g < 0.4, "Death field is red")
 		check(not death_field.safe_for_player, "Death field is only visual")
+
+	level.reset_to_checkpoint()
+	await frames(3)
+	check(not level.is_dead(), "R clears the spike dead state")
+	check(level.player.global_position.distance_to(level.get_checkpoint_anchor()) < 40.0,
+		"R respawns the player at the checkpoint")
 
 	spikes.cycle_interval = 1000.0
 	spikes._burst_left = 0

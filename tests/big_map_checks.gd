@@ -174,11 +174,18 @@ func _run() -> void:
 		if level.deaths > deaths_before:
 			break
 	check(level.deaths > deaths_before, "Standing in noise without a sound field kills the player")
+	check(level.is_dead(), "Noise death waits for R before resetting")
+	var restart_event := InputEventAction.new()
+	restart_event.action = &"restart"
+	restart_event.pressed = true
+	level._unhandled_input(restart_event)
+	await frames(3)
+	check(not level.is_dead(), "R clears the dead state")
 	check(level.player.global_position.distance_to(level.get_checkpoint_anchor()) < 40.0,
-		"Death respawns at the checkpoint")
-	check(level.breakables.has_cell(1, c2), "Death restores the checkpoint room's glass")
+		"R respawns at the checkpoint")
+	check(level.breakables.has_cell(1, c2), "R restores the checkpoint room's glass")
 
-	# 6. 房间裁剪：只处理玩家房间 + 上下左右相邻房间的物体。
+	# 6. 房间裁剪：只处理玩家当前房间（Room4/Room5 联动）。
 	var room2_start: Room = level.get_node("Rooms/Room2")
 	var room1_west: Room = level.get_node("Rooms/Room1")
 	var room3_east: Room = level.get_node("Rooms/Room3")
@@ -200,9 +207,9 @@ func _run() -> void:
 	var cp7_node := level.get_node("Objects/Checkpoint7") as Checkpoint
 	check(cp2_node.process_mode != Node.PROCESS_MODE_DISABLED and cp2_node.is_visible_in_tree(),
 		"Checkpoint in the player's room stays active")
-	check(cp1_node.process_mode != Node.PROCESS_MODE_DISABLED
-		and cp3_node.process_mode != Node.PROCESS_MODE_DISABLED,
-		"Checkpoints in neighbor rooms stay active")
+	check(cp1_node.process_mode == Node.PROCESS_MODE_DISABLED
+		and cp3_node.process_mode == Node.PROCESS_MODE_DISABLED,
+		"Checkpoints in other rooms are disabled")
 	check(cp7_node.process_mode == Node.PROCESS_MODE_DISABLED and not cp7_node.is_visible_in_tree(),
 		"Checkpoints in far rooms are disabled and hidden")
 	check(is_instance_valid(cp7_node), "Far room objects are not freed")
@@ -214,9 +221,19 @@ func _run() -> void:
 	check(cp4_node.process_mode != Node.PROCESS_MODE_DISABLED,
 		"Checkpoint4 activates after entering Room4")
 	check(cp5_node.process_mode != Node.PROCESS_MODE_DISABLED,
-		"Checkpoint5 (neighbor above) stays active from Room4")
+		"Room5 loads together with Room4")
+	check(cp3_node.process_mode == Node.PROCESS_MODE_DISABLED,
+		"Room3 is not loaded while in Room4")
 	check(cp7_node.process_mode == Node.PROCESS_MODE_DISABLED,
 		"Checkpoint7 stays disabled from Room4")
+
+	var animal: Animal = level.get_node("Animals/Animal") as Animal
+	var animal_home: Vector2 = animal._home_position
+	animal.global_position = animal_home + Vector2(48, 0)
+	level.reset_to_checkpoint()
+	await frames(2)
+	check(animal.global_position.distance_to(animal_home) < 0.5,
+		"R reset returns animals to their home position")
 
 	level.noise.clear_all()
 	level.breakables.clear_all()

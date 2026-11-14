@@ -89,6 +89,9 @@ func _viewport_to_world(screen_point: Vector2) -> Vector2:
 
 func restart_run() -> void:
 	player.reset_to(_spawn_position)
+	for animal in get_tree().get_nodes_in_group("animal"):
+		if animal.has_method("reset_home"):
+			animal.call("reset_home")
 	for ring in sound_fields.get_children():
 		ring.queue_free()
 	noise.sync_visibility([])

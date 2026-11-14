@@ -17,6 +17,12 @@ func frames(count: int) -> void:
 	for _i in range(count):
 		await physics_frame
 
+func _press_restart() -> void:
+	var event := InputEventAction.new()
+	event.action = &"restart"
+	event.pressed = true
+	level._unhandled_input(event)
+
 func _run() -> void:
 	await _test_door()
 	await _test_animal()
@@ -63,6 +69,8 @@ func _test_door() -> void:
 	await frames(4)
 	check(level.deaths > deaths_before, "Door eats the owner of a white field it touches")
 	check(door._consumed and not door.visible, "Consumed door is hidden")
+	_press_restart()
+	await frames(3)
 	door.restore()
 	await frames(2)
 	check(not door._consumed and door.visible and door._aura != null, "Door restores with its pulse field")
@@ -80,7 +88,9 @@ func _test_door() -> void:
 	deaths_before = level.deaths
 	await frames(4)
 	check(level.deaths > deaths_before, "Door in the checkpoint room eats the player")
-	check(not door2._consumed and door2.visible, "Room reset restores the door")
+	_press_restart()
+	await frames(3)
+	check(not door2._consumed and door2.visible, "R reset restores the door in the checkpoint room")
 
 	var body_before: int = level.deaths
 	level.player.reset_to(door2.global_position)
@@ -148,6 +158,100 @@ func _test_animal() -> void:
 	var x1: float = animal.global_position.x
 	await frames(20)
 	check(absf(animal.global_position.x - x1) < 8.0, "Animal stops when the lv1 field ends")
+
+	# lv2 震飞：动物被击飞一段距离后受重力落地。
+	var knock_x: float = animal.global_position.x
+	var knock := SoundField.new()
+	knock.side_length = 160.0
+	knock.lifetime = 2.0
+	knock.level = 2
+	knock.safe_for_player = true
+	sound_fields.add_child(knock)
+	knock.global_position = animal.global_position
+	await frames(8)
+	check(animal.global_position.x > knock_x + 10.0, "lv2 field knocks the animal away")
+	check(animal.velocity.y < 0.0 or not animal.is_on_floor(), "Knocked animal leaves the ground")
+	knock.queue_free()
+	await frames(80)
+	check(animal.is_on_floor(), "Knocked animal falls back to the floor")
+
+	# R / 重启时动物归位。
+	var home_position: Vector2 = animal._home_position
+	level.restart_run()
+	await frames(2)
+	check(animal.global_position.distance_to(home_position) < 0.5,
+		"Restart returns the animal to its home position")
+
+	# 守边：临时平台 + 左侧 lv1 声场，动物停在平台右缘而不掉落。
+	var edge_animal: Animal = load("res://scenes/actors/animal.tscn").instantiate()
+	level.add_child(edge_animal)
+	edge_animal.global_position = Vector2(700, 284)
+	var edge_platform := StaticBody2D.new()
+	edge_platform.collision_layer = 1
+	edge_platform.collision_mask = 0
+	var edge_shape := CollisionShape2D.new()
+	var edge_rect := RectangleShape2D.new()
+	edge_rect.size = Vector2(96, 16)
+	edge_shape.shape = edge_rect
+	edge_platform.add_child(edge_shape)
+	level.add_child(edge_platform)
+	edge_platform.global_position = Vector2(700, 300)
+	await frames(4)
+	var edge_field := SoundField.new()
+	edge_field.side_length = 96.0
+	edge_field.lifetime = 3.0
+	edge_field.level = 1
+	edge_field.safe_for_player = true
+	sound_fields.add_child(edge_field)
+	edge_field.global_position = Vector2(650, 284)
+	await frames(70)
+	check(edge_animal.global_position.x <= 749.0 and edge_animal.global_position.y < 300.0
+		and edge_animal.is_on_floor(), "Animal stops at the platform edge instead of falling")
+	edge_field.queue_free()
+	edge_animal.queue_free()
+	edge_platform.queue_free()
+	await frames(3)
+
+	# 爬一格：平台上放一个 16px 高的台阶，动物会被 lv1 声场驱赶着爬上去。
+	var step_animal: Animal = load("res://scenes/actors/animal.tscn").instantiate()
+	level.add_child(step_animal)
+	step_animal.global_position = Vector2(690, 284)
+	var step_platform := StaticBody2D.new()
+	step_platform.collision_layer = 1
+	step_platform.collision_mask = 0
+	var step_pshape := CollisionShape2D.new()
+	var step_prect := RectangleShape2D.new()
+	step_prect.size = Vector2(96, 16)
+	step_pshape.shape = step_prect
+	step_platform.add_child(step_pshape)
+	level.add_child(step_platform)
+	step_platform.global_position = Vector2(700, 300)
+	var step := StaticBody2D.new()
+	step.collision_layer = 1
+	step.collision_mask = 0
+	var step_shape := CollisionShape2D.new()
+	var step_rect := RectangleShape2D.new()
+	step_rect.size = Vector2(32, 16)
+	step_shape.shape = step_rect
+	step.add_child(step_shape)
+	level.add_child(step)
+	step.global_position = Vector2(724, 284)
+	await frames(4)
+	var step_field := SoundField.new()
+	step_field.side_length = 96.0
+	step_field.lifetime = 3.0
+	step_field.level = 1
+	step_field.safe_for_player = true
+	sound_fields.add_child(step_field)
+	step_field.global_position = Vector2(640, 284)
+	await frames(90)
+	check(step_animal.global_position.y <= 272.0 and step_animal.global_position.x > 708.0,
+		"Animal climbs a one-tile step and keeps moving")
+	step_field.queue_free()
+	step_animal.queue_free()
+	step_platform.queue_free()
+	step.queue_free()
+	await frames(3)
 
 	var door: Door = load("res://scenes/world/door.tscn").instantiate()
 	door.global_position = animal.global_position + Vector2(64, 0)
