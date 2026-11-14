@@ -13,6 +13,10 @@ const TURN_DURATION := 0.12
 
 enum ClimbPhase { NONE, TURN_UP, RISE, TURN_FORWARD, MOVE_ONTO }
 
+## 动物叫声之间的间隔，单位：秒
+@export var animal_sound_interval: float = 1.0
+
+@export var _animal_sound_elapsed: float = 0.0
 @export var move_speed := 90.0
 @export var gravity := 1500.0
 @export var detection_margin := 16.0
@@ -355,3 +359,27 @@ func _draw() -> void:
 	draw_rect(Rect2(-7, -6, 14, 12), Color.WHITE)
 	draw_rect(Rect2(-4, -3, 2, 2), Color.BLACK)
 	draw_rect(Rect2(2, -3, 2, 2), Color.BLACK)
+
+
+func _on_visible_on_screen_notifier_2d_screen_entered() -> void:
+	_animal_sound_elapsed = 0.0
+	$AnimalSound.play()
+
+
+func _on_visible_on_screen_notifier_2d_screen_exited() -> void:
+	$AnimalSound.stop()
+	_animal_sound_elapsed = 0.0
+
+func _process(delta: float) -> void:
+	if not $VisibleOnScreenNotifier2D.is_on_screen():
+		return
+
+	if $AnimalSound.playing:
+		_animal_sound_elapsed = 0.0
+		return
+
+	_animal_sound_elapsed += delta
+
+	if _animal_sound_elapsed >= animal_sound_interval:
+		_animal_sound_elapsed = 0.0
+		$AnimalSound.play()
