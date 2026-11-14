@@ -232,6 +232,7 @@ func _player_rect() -> Rect2:
 ## 玩家死亡：先记下死亡位置，重置到存档点，再在原死亡位置放一个红色死亡声场（纯视觉）。
 func _die() -> void:
 	var death_position := player.global_position
+	player.play_death_sound()
 	deaths += 1
 	reset_to_checkpoint()
 	_spawn_death_field(death_position)

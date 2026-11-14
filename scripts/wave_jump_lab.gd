@@ -39,6 +39,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_grace_remaining = maxf(0.0, _grace_remaining - delta)
 	if _grace_remaining <= 0.0:
+		player.play_death_sound()
 		deaths += 1
 		restart_run()
 
