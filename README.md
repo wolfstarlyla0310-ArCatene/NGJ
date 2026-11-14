@@ -101,7 +101,7 @@ godot --headless --path . --script res://tests/big_map_checks.gd
 ```
 
 - `keyboard_movement_checks.gd`：46 项，覆盖跳跃、声场等级与边长、走路/撞墙、玻璃破碎与恢复、噪音、调试传送。
-- `big_map_checks.gd`：18 项，覆盖玩家不可见、房间、相机切关、进房存档点绑定、单房间 R、噪音死亡回存档点。
+- `big_map_checks.gd`：21 项，覆盖玩家无可见本体、房间、相机切关、声场 0.1 秒扩散、进房存档点绑定、单房间 R、噪音死亡回存档点。
 
 ## 协作与原型范围
 

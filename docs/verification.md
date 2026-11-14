@@ -1,5 +1,13 @@
 # 验证记录
 
+2026-11-14（声场扩散视觉）
+
+- [scripts/sound_field.gd](scripts/sound_field.gd)：新增 `expand_duration = 0.1s`，方框从中心 ease-out 扩散到目标边长，之后保持满框并在 0.5 秒生命周期内淡出。
+- 扩散**只影响视觉**：`contains_point()` 与世界脚本里的 `_active_sound_field_rects()` 仍用目标 `side_length`，玻璃/噪音/安全判定不变。
+- 测试：`tests/big_map_checks.gd` 新增两项扩散状态检查（生成 2 帧后 `current_side ∈ (0, 96)`，0.1 秒后 ≈ 96）。
+- 同步当前工作区调整：玩家碰撞体 16×16、跳跃高度按 `jump_height_tiles` 计算（当前 6 格 / 96px），测试按 `jump_height_tiles × 16` 校验跳跃顶点、撞墙 `contact_x = 136`；大地图测试改为从当前场景动态读取房间/存档点/相机，避免绑定具体关卡内容。
+- headless：`keyboard_movement_checks.gd` 46 项、`big_map_checks.gd` 21 项全部通过。
+
 2026-11-14（16px 图格、完整物理层、正式大地图、玩家隐去）
 
 - 三张图集恢复为 CCCAT 原生的 **128×96、16×16 一格**；瓦片集 `texture_region_size = 16×16`、`tile_size = 16×16`，47 格 blob 连接规则与 CCCAT 一致。
@@ -8,7 +16,7 @@
 - 机制测试关改用直接绘制的 16px 地形（`Terrain/Visual`），移除 `terrain_visual.gd` 与 WallPlatform；玻璃/噪音演示格按 16px 坐标重新烘焙。
 - 新增正式大地图 `scenes/world/big_map.tscn`：两间房、连续 16px 地板、Checkpoint、`RoomCamera` 相机切关、单房间 R、进房自动绑定存档点（只记录坐标，不写磁盘）。
 - 移植 CCCAT 的房间编辑器插件（添加房间 / 校验地图 / 8 向拖拽）。
-- headless 验证：`tests/keyboard_movement_checks.gd` 46 项、`tests/big_map_checks.gd` 18 项全部通过；编辑器插件加载无报错。
+- headless 验证：`tests/keyboard_movement_checks.gd` 46 项、`tests/big_map_checks.gd` 21 项全部通过；编辑器插件加载无报错。
 
 2026-11-14，本机 Godot 4.7.2 标准版（Steam 版引擎）。
 
