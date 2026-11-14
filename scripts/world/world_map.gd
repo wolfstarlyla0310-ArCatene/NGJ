@@ -30,6 +30,8 @@ var _checkpoints: Array[Checkpoint] = []
 var _grace_remaining := GRACE_SECONDS
 ## 当前按房间裁剪所依据的玩家房间；房间不变时不做任何遍历。
 var _culled_room: Room = null
+## 死亡后停在原地，等玩家按 R 才重置。
+var _dead := false
 
 func _ready() -> void:
 	process_physics_priority = 100
@@ -65,6 +67,9 @@ func _spawn_anchor(room: Room) -> Vector2:
 
 func _physics_process(delta: float) -> void:
 	_update_room_culling()
+	# 死亡后停在原地，等待 R 键重置；不再重复判定危险。
+	if _dead:
+		return
 	var player_rect := _player_rect()
 	if _touching_lethal_field(player_rect) or spikes.touches_rect(player_rect):
 		_die()
@@ -174,6 +179,8 @@ func _checkpoint_in_room(room: Room) -> Checkpoint:
 ## —— 单房间 R / 噪音死亡 ——
 
 func reset_to_checkpoint() -> void:
+	_dead = false
+	player.controls_enabled = true
 	var room := _room_of(_checkpoint_position)
 	if room == null:
 		room = _room_of(player.global_position)
@@ -189,6 +196,9 @@ func reset_to_checkpoint() -> void:
 	player.reset_to(_checkpoint_position)
 	_culled_room = null
 	_update_room_culling(true)
+	for animal in get_tree().get_nodes_in_group("animal"):
+		if animal.has_method("reset_home"):
+			animal.call("reset_home")
 	_grace_remaining = GRACE_SECONDS
 	if room != null:
 		for door in get_tree().get_nodes_in_group("door"):
@@ -231,11 +241,16 @@ func _player_rect() -> Rect2:
 
 ## 玩家死亡：先记下死亡位置，重置到存档点，再在原死亡位置放一个红色死亡声场（纯视觉）。
 func _die() -> void:
-	var death_position := player.global_position
-	player.play_death_sound()
+	if _dead:
+		return
+	_dead = true
 	deaths += 1
-	reset_to_checkpoint()
-	_spawn_death_field(death_position)
+	player.controls_enabled = false
+	player.velocity = Vector2.ZERO
+	_spawn_death_field(player.global_position)
+
+func is_dead() -> bool:
+	return _dead
 
 func _spawn_death_field(world_position: Vector2) -> void:
 	var field := SoundField.new()
@@ -262,8 +277,10 @@ func _update_room_culling(force := false) -> void:
 	if not force and here == _culled_room:
 		return
 	_culled_room = here
-	var active_rooms := RoomRegistry.orthogonal_neighbors(get_rooms(), here)
-	active_rooms.append(here)
+	var active_rooms: Array[Room] = [here]
+	var linked := _linked_room_for(here)
+	if linked != null:
+		active_rooms.append(linked)
 	var managed: Array[Node] = []
 	for container_name in ["Objects", "Animals", "Buttons"]:
 		var container := get_node_or_null(container_name)
@@ -290,6 +307,19 @@ func _collect_managed_nodes(node: Node, out: Array[Node]) -> void:
 		if child is Checkpoint or child is Animal or child is DoorButton:
 			out.append(child)
 		_collect_managed_nodes(child, out)
+
+## Room4 与 Room5 联动，两个房间一起加载。
+func _linked_room_for(room: Room) -> Room:
+	if room == null:
+		return null
+	var pair := ""
+	if room.name == &"Room4":
+		pair = "Room5"
+	elif room.name == &"Room5":
+		pair = "Room4"
+	if pair.is_empty():
+		return null
+	return get_node_or_null("Rooms/" + pair) as Room
 
 func _first_room() -> Room:
 	var rooms := get_rooms()

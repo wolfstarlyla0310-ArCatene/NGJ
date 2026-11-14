@@ -1,5 +1,13 @@
 # 验证记录
 
+2026-11-14（动物归位 / 攀爬 / 守边 / 震飞 + 死亡按 R + 仅当前房间）
+
+- `world_map.gd`：新增 `_dead`；死亡后玩家停在原地、不可操作，`_die()` 不再瞬时重置；按 R 调用 `reset_to_checkpoint()` 才清 dead、启用控制并重置所有 `animal` 组动物。存活时 R 仍是手动重置。
+- `animal.gd`：deferred 记录出生点，新增 `reset_home()`；一格台阶用 `test_move` 抬高约 17px 后前进；平台边缘用前缘向下射线守边；被 lv2 声场命中时按 `knockback_speed` / `knockback_up_speed` / `knockback_duration` 震飞，之后受重力掉落；同一 lv2 场只震飞一次。
+- `wave_jump_lab.gd`：`restart_run()` 同样让动物归位。
+- 房间裁剪：active 集合改为**仅玩家当前房间**；Room4 与 Room5 联动，二者一起加载。
+- 测试：`spike_checks` 19 → **22**（死亡后需 R）；`big_map_checks` 40 → **44**（死亡需 R、仅当前房间 / Room4+Room5、动物归位）；`door_animal_checks` 17 → **23**（门死亡后按 R、lv2 震飞、平台边缘、爬台阶、归位）。七套 headless（本机 Godot 4.5.1）：79 + 44 + 38 + 22 + 7 + 8 + 23 全部通过。
+
 2026-11-14（零净空顶头 lv2 / lv2 2 秒 / 房间裁剪）
 
 - `player.gd`：起跳瞬间用 `test_move(global_transform, Vector2.UP * 3px)` 记录头顶净空；零净空（一格高走廊约 2px）顶头 → lv2，有净空 → lv1。删除旧的上升距离判定。
