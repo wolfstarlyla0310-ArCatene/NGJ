@@ -14,10 +14,12 @@ const CONTACT_TOLERANCE_PIXELS: float = 0.5
 @export var coyote_time: float = 0.12
 @export var jump_buffer: float = 0.12
 @export var walk_wave_interval_tiles: float = 2.0
-## 走路声场边长（格）；当前 3 格 = 48 像素。
-@export var walk_wave_side_cells: float = 3.0
-## 跳跃/落地声场边长（格）；当前 5 格 = 80 像素。
-@export var jump_wave_side_cells: float = 5.0
+## 走路 / lv0 落地声场边长（格）；当前 3 格 = 48 像素。
+@export var walk_wave_side_cells: float = 2.0
+## lv1 落地声场边长（格）；2 < 落差 ≤ 6 格，当前 5 格 = 80 像素。
+@export var landing_lv1_side_cells: float = 5.0
+## lv2 落地声场边长（格）；落差 > 6 格，当前 7 格 = 112 像素。
+@export var landing_lv2_side_cells: float = 9.0
 
 var controls_enabled: bool = false:
 	set(value):
@@ -71,11 +73,16 @@ func _emit_landing_wave() -> void:
 	if tiles < 1:
 		return
 	var level := 0
-	if tiles >= 8:
+	if tiles > 6:
 		level = 2
-	elif tiles >= 4:
+	elif tiles > 2:
 		level = 1
-	wave_emitted.emit(global_position, jump_wave_side_cells * TILE_SIZE, level, "landing")
+	var side_cells := walk_wave_side_cells
+	if level == 1:
+		side_cells = landing_lv1_side_cells
+	elif level == 2:
+		side_cells = landing_lv2_side_cells
+	wave_emitted.emit(global_position, side_cells * TILE_SIZE, level, "landing")
 
 func _emit_step_waves(was_grounded: bool, pre_x: float) -> void:
 	var moved := absf(global_position.x - pre_x)

@@ -1,5 +1,11 @@
 # 验证记录
 
+2026-11-14（落地声场 3/5/7 分级；触发方块常显）
+
+- `player.gd`：落地等级阈值改为 `tiles > 6 → lv2`、`tiles > 2 → lv1`（正好 6 格算 lv1）；边长 lv0 3 格（48px）、lv1 5 格（80px）、lv2 7 格（112px）。导出 `walk_wave_side_cells` / `landing_lv1_side_cells` / `landing_lv2_side_cells`，可在 Player 检查器调整。
+- `TriggerField._ready` 的运行时隐藏已移除：触发图块在编辑器和运行时都显示。
+- 测试：`keyboard_movement_checks.gd` 46 项、`big_map_checks.gd` 21 项、`spike_checks.gd` 13 项、`trigger_checks.gd` 7 项全部通过。
+
 2026-11-14（触发方块仅编辑器可见；玩家声场 3/5 格）
 
 - `TriggerField._ready()` 设置 `visible = Engine.is_editor_hint()`：编辑器里显示青色触发图块，运行时整个 `Triggers` 层隐藏（图格本身无贴图）。

@@ -77,8 +77,9 @@ func _run() -> void:
 	level.noise.clear_all()
 	level.breakables.clear_all()
 	var ground_y: float = level.player.position.y
-	var jump_side: float = level.player.jump_wave_side_cells * 16.0
-	var walk_side: float = level.player.walk_wave_side_cells * 16.0
+	var lv0_side: float = level.player.walk_wave_side_cells * 16.0
+	var lv1_side: float = level.player.landing_lv1_side_cells * 16.0
+	var lv2_side: float = level.player.landing_lv2_side_cells * 16.0
 	# 左侧墙世界右缘 x=128，玩家半宽 8（16×16 碰撞体）
 	var contact_x: float = 128.0 + 8.0
 
@@ -97,7 +98,7 @@ func _run() -> void:
 	check(count_waves("landing") == 1, "Jump landing emits exactly one landing sound field")
 	var jump_sides := wave_sides("landing")
 	var jump_levels := wave_levels("landing")
-	check(jump_sides.size() >= 1 and absf(jump_sides[0] - jump_side) < 0.01, "Jump landing emits the configured jump side (%.0f px)" % jump_side)
+	check(jump_sides.size() >= 1 and absf(jump_sides[0] - lv1_side) < 0.01, "Jump landing emits the configured lv1 side (%.0f px)" % lv1_side)
 	check(jump_levels.size() >= 1 and jump_levels[0] == 1, "Jump landing is a level-1 sound field")
 	check(level.player.is_on_floor() and absf(level.player.position.y - ground_y) < 1.0, "Landing sonar does not bounce the player")
 
@@ -106,26 +107,26 @@ func _run() -> void:
 	level.player.reset_to(Vector2(900, ground_y - 32.0))
 	await frames(150)
 	check(count_waves("landing") == 1, "32 px drop emits one landing sound field")
-	check(wave_sides("landing")[0] == jump_side and wave_levels("landing")[0] == 0, "32 px drop is lv0 / %.0f px" % jump_side)
+	check(wave_sides("landing")[0] == lv0_side and wave_levels("landing")[0] == 0, "32 px drop is lv0 / %.0f px" % lv0_side)
 
 	clear_records()
 	level.player.reset_to(Vector2(900, ground_y - 64.0))
 	await frames(150)
 	check(count_waves("landing") == 1, "64 px drop emits one landing sound field")
-	check(wave_sides("landing")[0] == jump_side and wave_levels("landing")[0] == 1, "64 px drop is lv1 / %.0f px" % jump_side)
+	check(wave_sides("landing")[0] == lv1_side and wave_levels("landing")[0] == 1, "64 px drop is lv1 / %.0f px" % lv1_side)
 	check(level.player.is_on_floor(), "64 px drop settles on the floor")
 
 	clear_records()
 	level.player.reset_to(Vector2(900, ground_y - 96.0))
 	await frames(150)
 	check(count_waves("landing") == 1, "96 px drop emits one landing sound field")
-	check(wave_sides("landing")[0] == jump_side and wave_levels("landing")[0] == 1, "96 px drop is lv1 / %.0f px" % jump_side)
+	check(wave_sides("landing")[0] == lv1_side and wave_levels("landing")[0] == 1, "96 px drop is lv1 / %.0f px" % lv1_side)
 
 	clear_records()
 	level.player.reset_to(Vector2(900, ground_y - 128.0))
 	await frames(150)
 	check(count_waves("landing") == 1, "128 px drop emits one landing sound field")
-	check(wave_sides("landing")[0] == jump_side and wave_levels("landing")[0] == 2, "128 px drop is lv2 / %.0f px" % jump_side)
+	check(wave_sides("landing")[0] == lv2_side and wave_levels("landing")[0] == 2, "128 px drop is lv2 / %.0f px" % lv2_side)
 
 	clear_records()
 	level.player.reset_to(Vector2(900, ground_y - 8.0))
@@ -150,8 +151,8 @@ func _run() -> void:
 	var step_levels := wave_levels("step")
 	var sides_ok := step_sides.size() == 3
 	for side in step_sides:
-		sides_ok = sides_ok and absf(side - walk_side) < 0.01
-	check(sides_ok, "Every step sound field is the configured walk side (%.0f px)" % walk_side)
+		sides_ok = sides_ok and absf(side - lv0_side) < 0.01
+	check(sides_ok, "Every step sound field is the configured lv0 side (%.0f px)" % lv0_side)
 	var levels_ok := step_levels.size() == 3
 	for level_value in step_levels:
 		levels_ok = levels_ok and level_value == 0

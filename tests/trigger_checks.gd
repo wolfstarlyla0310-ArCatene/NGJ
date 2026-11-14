@@ -31,14 +31,13 @@ func _run() -> void:
 	if triggers == null:
 		quit(1)
 		return
-	check(not triggers.visible, "Trigger layer is hidden at runtime (editor-only marker)")
 
 	var sound_fields: Node2D = level.get_node("SoundFields")
 	var trigger_cell: Vector2i = triggers.local_to_map(triggers.to_local(level.player.global_position))
 	# 玩家可能贴边轻微滑动，铺 3×3 触发格保证测试期间始终踩在触发区上。
 	for dx in range(-1, 2):
 		for dy in range(-1, 2):
-			triggers.set_cell(trigger_cell + Vector2i(dx, dy), 0, Vector2i.ZERO)
+			triggers.set_cell(trigger_cell + Vector2i(dx, dy), 1, Vector2i.ZERO)
 	check(triggers.get_cell_source_id(trigger_cell) != -1, "Trigger cell is painted")
 
 	# 触发方块不震碎玻璃。

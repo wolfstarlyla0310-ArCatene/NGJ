@@ -15,10 +15,6 @@ extends TileMapLayer
 
 var _cooldown_remaining := 0.0
 
-func _ready() -> void:
-	# 编辑器里显示青色方块方便绘制；运行时图格本身不可见，只留下触发的白色声场。
-	visible = Engine.is_editor_hint()
-
 func _physics_process(delta: float) -> void:
 	if Engine.is_editor_hint() or player == null or sound_fields == null:
 		return

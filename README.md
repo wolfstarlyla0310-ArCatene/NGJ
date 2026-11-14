@@ -29,11 +29,11 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | 来源 | 等级 | 边长 |
 |---|---|---|
 | 走路（起步立即发一次，之后每移动 32 像素） | lv0 | 3 格 / 48 像素 |
-| 落地落差不足 64 像素 | lv0 | 5 格 / 80 像素 |
-| 落地落差 64~127 像素 | lv1 | 5 格 / 80 像素 |
-| 落地落差 128 像素及以上 | lv2 | 5 格 / 80 像素 |
+| 落地落差 ≤ 2 格（≤ 32 像素） | lv0 | 3 格 / 48 像素 |
+| 落地落差 3~6 格（33~96 像素） | lv1 | 5 格 / 80 像素 |
+| 落地落差 > 6 格（> 96 像素） | lv2 | 7 格 / 112 像素 |
 
-等级（lv0/1/2）决定能震碎哪一级玻璃；边长由 Player 检查器里的 `walk_wave_side_cells` / `jump_wave_side_cells` 控制。
+等级（lv0/1/2）决定能震碎哪一级玻璃；边长由 Player 检查器里的 `walk_wave_side_cells` / `landing_lv1_side_cells` / `landing_lv2_side_cells` 控制。
 
 跳跃高度由 `jump_height_tiles` 决定（当前 4 个 16px 格 = 64 像素），不随按键时长变化。
 
@@ -62,7 +62,7 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 
 ## 触发方块
 
-- 无碰撞箱方块：在 `Triggers` 层用 `trigger_tileset.tres` 直接绘制/刷。图块在编辑器里显示为青色方块，**运行时隐藏**（图格本身无贴图）；玩家可以直接穿过。
+- 无碰撞箱方块：在 `Triggers` 层用 `trigger_tileset.tres` 直接绘制/刷。图块在编辑器和运行时都显示（当前使用 `assets/tiles/wind.png`）；玩家可以直接穿过。
 - 玩家站在触发格上时，每 **0.5 秒**发出一次**白色 3 格声场**（48px）。它与玩家声场一样是安全区：可以隐藏噪音、提供噪音免疫；**不震碎玻璃**。
 - 冷却由触发层统一控制；站在触发格上会按 0.5 秒持续触发，离开后停止。
 
@@ -108,9 +108,9 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | `resources/whitebox_tileset.tres` | 16×16、47 格黑白 blob 地形图集，含完整物理层 |
 | `resources/lv1_tileset.tres`、`lv2_tileset.tres`、`noise_tileset.tres` | 玻璃与噪音瓦片集 |
 | `resources/spike_tileset.tres`、`assets/tiles/spike_tile.svg` | 刺图格的编辑器可见标记（运行时刺层隐藏） |
-| `resources/trigger_tileset.tres`、`assets/tiles/trigger_tile.svg` | 触发方块的 16×16 图块（编辑器可见、运行时隐藏、无碰撞） |
+| `resources/trigger_tileset.tres`、`assets/tiles/wind.png` | 触发方块的可见 16×16 图块（常显、无碰撞） |
 
-跳跃高度与行走发波间隔在 `scripts/player.gd` 的 `jump_height_tiles`、`walk_wave_interval_tiles` 中调整；走路/跳跃声场边长在 `walk_wave_side_cells` / `jump_wave_side_cells`（16px 格）中调整。
+跳跃高度与行走发波间隔在 `scripts/player.gd` 的 `jump_height_tiles`、`walk_wave_interval_tiles` 中调整；走路/lv1/lv2 落地声场边长在 `walk_wave_side_cells` / `landing_lv1_side_cells` / `landing_lv2_side_cells`（16px 格）中调整。
 
 ## 检查
 
@@ -126,7 +126,7 @@ godot --headless --path . --script res://tests/trigger_checks.gd
 - `keyboard_movement_checks.gd`：46 项，覆盖跳跃、声场等级与边长、走路/撞墙、玻璃破碎与恢复、噪音、调试传送。
 - `big_map_checks.gd`：21 项，覆盖玩家无可见本体、房间、相机切关、声场扩散、进房存档点绑定、单房间 R、噪音死亡回存档点。
 - `spike_checks.gd`：13 项，覆盖刺层存在、3 连发红色致命声场、边长 48px、不碎玻璃、接触死亡、死亡发出 80px 红色声场。
-- `trigger_checks.gd`：8 项，覆盖触发格存在、运行时隐藏、站上去重复发白色 48px 声场、安全区、不碎玻璃、冷却。
+- `trigger_checks.gd`：7 项，覆盖触发格存在、站上去重复发白色 48px 声场、安全区、不碎玻璃、冷却。
 
 ## 协作与原型范围
 
