@@ -46,5 +46,5 @@ position = Vector2(320, 522)
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1822605037]
 position = Vector2(640, 380)
 
-[node name="SoundFields" type="Node2D" parent="." unique_id=2117810470]
+[node name="SoundFields" type="Node2D" parent="." unique_id=2117810470 groups=["sound_fields"]]
 z_index = 7

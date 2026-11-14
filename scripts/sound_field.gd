@@ -15,6 +15,12 @@ extends Node2D
 @export var lethal := false
 ## 是否提供噪音免疫并隐藏噪音格。玩家声场 true，刺/死亡声场 false。
 @export var safe_for_player := true
+## 声场等级（0/1/2）；动物只响应 level == 1。
+@export var level := 0
+## 持久声场（门脉冲）：世界重置时不清理。
+@export var persistent := false
+## 白声场的主人（玩家 / 动物）；门的红色脉冲用它在接触白声场时吃掉主人。
+var emitter: Node2D = null
 
 var age: float = 0.0
 ## 当前可视边长；只影响绘制，不影响 contains_point / 世界判定。

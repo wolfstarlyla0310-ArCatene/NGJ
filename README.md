@@ -18,7 +18,7 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | 输入 | 功能 |
 |---|---|
 | A / D 或 ← / → | 左右移动，空中也可控制方向 |
-| 空格 / W / ↑ | 跳跃，高度由 `player.tscn` 的 `jump_height_tiles` 决定（当前 4 格 / 64 像素） |
+| 空格 / W / ↑ | 跳跃，高度由 `player.tscn` 的 `jump_height_tiles` 决定（当前 4 格 / 64 像素）；起跳会发出一次 lv0 声场 |
 | R | 回到存档点，并只重置存档点所在房间的玻璃 |
 | 鼠标左键 / Esc | 仅机制测试关：调试传送 / 静默暂停 |
 
@@ -29,9 +29,12 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | 来源 | 等级 | 边长 |
 |---|---|---|
 | 走路（起步立即发一次，之后每移动 32 像素） | lv0 | 2 格 / 32 像素 |
+| 起跳 | lv0 | 2 格 / 32 像素 |
 | 落地落差 ≤ 2 格（≤ 32 像素） | lv0 | 2 格 / 32 像素 |
 | 落地落差 3~6 格（33~96 像素） | lv1 | 5 格 / 80 像素 |
 | 落地落差 > 6 格（> 96 像素） | lv2 | 9 格 / 144 像素 |
+| 动物移动中（每 16 像素） | lv0 | 1 格 / 16 像素 |
+| 动物静止时（间歇） | lv0 | 由 `idle_wave_side_cells` 控制（当前 1.4 格 / 22 像素） |
 
 等级（lv0/1/2）决定能震碎哪一级玻璃；边长由 Player 检查器里的 `walk_wave_side_cells` / `landing_lv1_side_cells` / `landing_lv2_side_cells` 控制。
 
@@ -74,6 +77,24 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 - 声场消失后再保持 **0.2 秒**才隐去。
 - 大地图 `Barriers` 层已接好 `sound_fields`；「校验地图」会检查这条接线。
 
+## 门陷阱与动物
+
+### 门（32×32，一次性陷阱）
+
+- 把 `scenes/world/door.tscn` 放到 `Doors` 容器下。门体是 32×32 深红色方块，持续发出 **16~48px 缓慢收缩/放大的红色脉冲声场**，透明度随之变化。
+- 任何发声活物（玩家、动物）接触门本体 → 被吃掉并消失，门也消失。
+- 门的红色脉冲**接触到白色声场**时，会吃掉这个白色声场的**主人**（玩家或动物），不必接触门体。
+- 门被吃掉后隐藏、脉冲消失；按 R / 死亡重置存档点房间时随房间恢复。`Doors.sound_fields` 自动通过 `sound_fields` 组找到声场容器。
+
+### 动物（受重力）
+
+- 把 `scenes/actors/animal.tscn` 放到 `Animals` 容器下。动物是 16×16 的**不可见物体**（无贴图），受重力影响，会站在地形上/掉落。
+- 附近出现 **lv1 声场**时被激活，向背离声源的方向水平移动；玩家跳落产生 lv1 声场即可把它驱离。
+- 移动时每 16px 像玩家一样发出一个 **1×1 格（16px）白色声场**（安全，level 0）。
+- 静止时每 **2 秒**间歇性发出一个由 `idle_wave_side_cells` 控制的 **lv0 白色声场**（当前 1.4 格 / 22px；间隔 `idle_wave_interval` 可调）。
+- 动物声场的持续时间与扩散速度由 `wave_lifetime`（当前 1.0 秒）和 `wave_expand_duration`（当前 0.5 秒）控制，比玩家声场更久、更慢。
+- 动物也会被门吃掉：它的白色声场碰到门的红色脉冲时，门会吃掉它。
+
 ## 正式大地图与房间
 
 - `scenes/world/big_map.tscn` 是默认入口：一张大地图 + `Rooms/RoomN` 房间框。
@@ -112,6 +133,8 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | `scripts/world/spike_field.gd` | 刺图格层：定期发射 3 连发红色致命短声场 |
 | `scripts/world/trigger_field.gd` | 触发方块层：玩家站上去每 0.5 秒发一次白色 3 格声场 |
 | `scripts/world/barrier_field.gd` | 声场屏障层：被任意声场覆盖时显形挡人，声场消失 0.2 秒后隐去 |
+| `scripts/world/door.gd`、`scripts/world/door_field.gd`、`scenes/world/door.tscn` | 32×32 门陷阱与 16~48px 红色脉冲声场 |
+| `scripts/actors/animal.gd`、`scenes/actors/animal.tscn` | 受重力动物：lv1 驱赶、移动发 1×1 白色声场 |
 | `scripts/breakables.gd` | 图格绘制转碰撞、同级声场震碎、按房间恢复 |
 | `scripts/noise_field.gd` | 红色绘制转噪音区域 |
 | `resources/whitebox_tileset.tres` | 16×16、47 格黑白 blob 地形图集，含完整物理层 |
@@ -132,13 +155,15 @@ godot --headless --path . --script res://tests/big_map_checks.gd
 godot --headless --path . --script res://tests/spike_checks.gd
 godot --headless --path . --script res://tests/trigger_checks.gd
 godot --headless --path . --script res://tests/barrier_checks.gd
+godot --headless --path . --script res://tests/door_animal_checks.gd
 ```
 
-- `keyboard_movement_checks.gd`：46 项，覆盖跳跃、声场等级与边长、走路/撞墙、玻璃破碎与恢复、噪音、调试传送。
+- `keyboard_movement_checks.gd`：48 项，覆盖跳跃/起跳声场、声场等级与边长、走路/撞墙、玻璃破碎与恢复、噪音、调试传送。
 - `big_map_checks.gd`：21 项，覆盖玩家无可见本体、房间、相机切关、声场扩散、进房存档点绑定、单房间 R、噪音死亡回存档点。
 - `spike_checks.gd`：16 项，覆盖刺层存在、3 连发红色致命声场、边长 48px、不碎玻璃、接触死亡、死亡发出 80px 红色声场、lv2 摧毁与房间重置恢复。
 - `trigger_checks.gd`：7 项，覆盖触发格存在、站上去重复发白色 48px 声场、安全区、不碎玻璃、冷却。
 - `barrier_checks.gd`：7 项，覆盖屏障初始隐藏、任意声场显形、物理层、阻挡玩家、声场结束 0.2 秒后隐去。
+- `door_animal_checks.gd`：17 项，覆盖门脉冲、红脉冲吃白声场主人、门随房间恢复、动物重力/不可见/静止声场/lv1 驱赶/移动声场与时长扩散、门吃动物。
 
 ## 协作与原型范围
 

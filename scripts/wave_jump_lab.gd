@@ -58,6 +58,8 @@ func _inside_active_pulse(point: Vector2) -> bool:
 func _on_wave(origin: Vector2, side: float, level: int, _kind: String) -> void:
 	var field := SoundField.new()
 	field.side_length = side
+	field.level = level
+	field.emitter = player
 	sound_fields.add_child(field)
 	field.global_position = origin
 	var half := Vector2(side, side) * 0.5

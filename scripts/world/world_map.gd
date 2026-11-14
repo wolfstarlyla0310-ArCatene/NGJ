@@ -26,6 +26,7 @@ var _grace_remaining := GRACE_SECONDS
 
 func _ready() -> void:
 	process_physics_priority = 100
+	add_to_group("world_map")
 	player.wave_emitted.connect(_on_wave)
 	player.controls_enabled = true
 	_collect_checkpoints()
@@ -56,6 +57,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _on_wave(origin: Vector2, side: float, level: int, _kind: String) -> void:
 	var field := SoundField.new()
 	field.side_length = side
+	field.level = level
+	field.emitter = player
 	sound_fields.add_child(field)
 	field.global_position = origin
 	var half := Vector2(side, side) * 0.5
@@ -161,11 +164,16 @@ func reset_to_checkpoint() -> void:
 		breakables.restore_rect(room.get_rect())
 		spikes.restore_rect(room.get_rect())
 	for field in sound_fields.get_children():
-		field.queue_free()
+		if field is SoundField and not field.persistent:
+			field.queue_free()
 	noise.sync_visibility([])
 	player.reset_to(_checkpoint_position)
 	_grace_remaining = GRACE_SECONDS
 	if room != null:
+		for door in get_tree().get_nodes_in_group("door"):
+			if door is Node2D and room.contains_world_point((door as Node2D).global_position) \
+					and door.has_method("restore"):
+				door.call("restore")
 		room_reset.emit(room)
 
 ## —— 声场 ——

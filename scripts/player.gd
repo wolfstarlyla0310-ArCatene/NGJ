@@ -58,6 +58,8 @@ func _physics_process(delta: float) -> void:
 		velocity.y = -launch
 		_jump_remaining = 0.0
 		_coyote_remaining = 0.0
+		# 起跳也发出一次 lv0 声场（与走路同尺寸）。
+		wave_emitted.emit(global_position, walk_wave_side_cells * TILE_SIZE, 0, "jump")
 
 	var pre_x := global_position.x
 	move_and_slide()

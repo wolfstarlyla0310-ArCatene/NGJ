@@ -1,5 +1,24 @@
 # 验证记录
 
+2026-11-14（动物声场更久、扩散更慢）
+
+- `animal.gd`：`wave_lifetime` 默认 0.5 → **1.0 秒**；新增 `wave_expand_duration = 0.5` 并写入动物生成的每个 `SoundField`，扩散比玩家声场更慢。移动 1 格 / 静止 `idle_wave_side_cells`（当前 1.4 格）的尺寸规则不变。
+- 测试：`door_animal_checks.gd` 17 项（移动/静止声场按动物导出值断言，并新增时长/扩散参数检查）。六套 headless 48 + 21 + 16 + 7 + 7 + 17 全部通过。
+
+2026-11-14（起跳声场；动物静止声场与隐藏）
+
+- `player.gd`：起跳时发出一次 lv0 声场（`walk_wave_side_cells` 边长，`kind = "jump"`）。
+- `animal.gd`：静止（无 lv1 驱动、落地、水平速度≈0）时每 `idle_wave_interval`（默认 2 秒）发一次 **2 格 lv0 白色声场**；移动仍每 16px 发 1 格；`animal.tscn` 设置为 `visible = false`（无贴图）。
+- 测试：`keyboard_movement_checks.gd` 48 项（新增起跳两项）、`door_animal_checks.gd` 16 项（新增不可见、静止 2 格声场）。六套 headless 48 + 21 + 16 + 7 + 7 + 16 全部通过。
+
+2026-11-14（门陷阱与受重力动物）
+
+- `SoundField` 新增 `level`、`persistent`、`emitter`；世界/测试关的玩家声场写入等级与 emitter；世界重置跳过 persistent 声场。
+- 新增 `DoorField`（红色脉冲 16~48px，透明度随脉冲变化、persistent）与 `Door`（32×32 Area2D）：门体接触吃掉玩家/动物；红色脉冲接触白色声场时吃掉白声场主人；吃掉后隐藏并释放脉冲；按 R / 死亡重置存档点房间时随房间恢复。
+- 新增 `Animal`（CharacterBody2D，layer 4，受重力）：附近有 lv1 声场时背离声源水平移动，移动时每 16px 发 1×1 白色声场；可被门吃掉。
+- 大地图新增 `SoundFields` 组、`Doors` / `Animals` 容器；`project.godot` 增加 `2d_physics/layer_4="动物"`；`WorldMap` 加入 `world_map` 组、写入声场等级/emitter、重置时恢复门。
+- 新增 `tests/door_animal_checks.gd` 14 项；六套 headless 46 + 21 + 16 + 7 + 7 + 14 全部通过。
+
 2026-11-14（声场显形屏障）
 
 - 新增 `assets/tiles/barrier_tile.svg`、`resources/barrier_tileset.tres`（16×16，含整格物理层）与 `scripts/world/barrier_field.gd`：运行时初始隐藏/无碰撞；被任意 `SoundField` 覆盖时 `set_cell` 显形并获得碰撞；声场消失后 0.2 秒擦除。编辑器里保留绘制内容。

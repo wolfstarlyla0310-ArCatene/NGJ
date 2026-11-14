@@ -88,6 +88,11 @@ func _run() -> void:
 	Input.action_press("jump")
 	await frames(2)
 	Input.action_release("jump")
+	check(count_waves("jump") == 1, "Jump takeoff emits one lv0 sound field")
+	var takeoff_sides := wave_sides("jump")
+	var takeoff_levels := wave_levels("jump")
+	check(takeoff_sides.size() >= 1 and absf(takeoff_sides[0] - lv0_side) < 0.01
+		and takeoff_levels[0] == 0, "Jump takeoff is lv0 with the configured walk side (%.0f px)" % lv0_side)
 	var apex_y: float = level.player.position.y
 	for _i in range(220):
 		await physics_frame
