@@ -1,6 +1,6 @@
 class_name DoorButton
 extends Area2D
-## 门按钮：被 lv1 及以上声场覆盖时视为「按下」。
+## 门按钮：被 lv1 及以上声场或动物的白色叫声覆盖时视为「按下」。
 ## 两种模式：ONE_SHOT 一次性（首次触发后永久锁定）；REBOUND 回弹（声场消失即松开，
 ## 除非 PuzzleDoorManager 判定同组 ≥2 个按钮同时满足而整组锁死）。
 ## 与门单向关系：按钮只管自己的状态，door_cells 由管理器解析，不引用门节点。
@@ -33,7 +33,7 @@ func _ready() -> void:
 		_sprite.frame_coords = atlas_coords_for(mode, is_pressed())
 
 func _physics_process(_delta: float) -> void:
-	var held := _is_lv1_field_on_me()
+	var held := _is_triggering_field_on_me()
 	if held == _held:
 		return
 	_held = held
@@ -63,7 +63,7 @@ func latch() -> void:
 ## 清回未触发态（R / 死亡重置房间时由 PuzzleDoorManager 调用）。
 func reset_state() -> void:
 	_latched = false
-	_held = _is_lv1_field_on_me()
+	_held = _is_triggering_field_on_me()
 	_refresh_visual()
 	pressed_changed.emit(self)
 
@@ -75,8 +75,8 @@ func _refresh_visual() -> void:
 	if _sprite != null:
 		_sprite.frame_coords = atlas_coords_for(mode, is_pressed())
 
-## 是否有任何 lv1 及以上声场与按钮的 16×16 区域相交。
-func _is_lv1_field_on_me() -> bool:
+## 动物白色声场也可触发；玩家普通走路的 lv0 声场仍不能触发。
+func _is_triggering_field_on_me() -> bool:
 	if _sound_fields == null or not is_instance_valid(_sound_fields):
 		_sound_fields = get_tree().get_first_node_in_group("sound_fields")
 	if _sound_fields == null:
@@ -86,6 +86,8 @@ func _is_lv1_field_on_me() -> bool:
 		if not child is SoundField or child.is_queued_for_deletion():
 			continue
 		var field := child as SoundField
-		if field.level >= 1 and field.get_rect().intersects(trigger_rect):
+		var animal_call := field.level == 0 and not field.lethal \
+			and is_instance_valid(field.emitter) and field.emitter.is_in_group("animal")
+		if (field.level >= 1 or animal_call) and field.get_rect().intersects(trigger_rect):
 			return true
 	return false

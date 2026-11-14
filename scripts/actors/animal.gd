@@ -1,15 +1,23 @@
 @tool
 class_name Animal
 extends CharacterBody2D
-## 受重力影响的动物：附近出现 lv1 声场时向背离声源的方向水平移动，
+## 蓝框每次触发后，向背离声源的方向前进至多 5 格；蓝框消失后仍继续。
 ## 移动时每 `wave_interval_pixels` 发出一个边长为 `move_wave_side_cells` 格的白色声场。
 ## 会爬上一格高的台阶、到平台边缘停住；被 lv2 声场命中会被震飞一段距离后掉落。
 
 const TILE_SIZE := 16.0
+# 留出碰撞余量，同时允许在恰好一格高的上层通道内落脚。
+const STEP_CLEARANCE := 0.1
+const STEP_PROBE := 2.0
+const TURN_DURATION := 0.12
+
+enum ClimbPhase { NONE, TURN_UP, RISE, TURN_FORWARD, MOVE_ONTO }
 
 @export var move_speed := 90.0
 @export var gravity := 1500.0
 @export var detection_margin := 16.0
+## 外层地形瓦片为 16px 一格；每次新蓝框触发后水平前进的距离。
+@export_range(0.0, 32.0, 0.5) var flee_distance_cells := 5.0
 
 @export_group("声场")
 ## 移动时发出的白色声场边长（格；1 格 = 16px）。当前 1 格 = 16px。
@@ -39,7 +47,17 @@ var _home_position := Vector2.ZERO
 var _home_captured := false
 var _knockback_remaining := 0.0
 var _last_lv2: SoundField = null
-var _step_cooldown := 0.0
+var _climb_phase := ClimbPhase.NONE
+var _climb_top := Vector2.ZERO
+var _climb_target := Vector2.ZERO
+var _climb_angle := 0.0
+var _turn_elapsed := 0.0
+var _climb_can_land := false
+var _walk_direction := 0.0
+var _walk_remaining := 0.0
+var _seen_lv1: Dictionary[int, WeakRef] = {}
+
+@onready var _sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
 
 func _ready() -> void:
 	queue_redraw()
@@ -53,7 +71,6 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
-	_step_cooldown = maxf(0.0, _step_cooldown - delta)
 	_prune_last_lv2()
 	var lv2 := _new_overlapping_lv2()
 	if lv2 != null:
@@ -64,35 +81,42 @@ func _physics_process(delta: float) -> void:
 		velocity.y = minf(velocity.y + gravity * delta, 1000.0)
 		_move_and_emit()
 		return
-	_walk(delta, _nearest_lv1_source())
-
-func _walk(delta: float, source: SoundField) -> void:
-	var dir := 0.0
+	if _climb_phase != ClimbPhase.NONE:
+		_climb(delta)
+		return
+	var source := _nearest_new_lv1_source()
 	if source != null:
-		dir = signf(global_position.x - source.global_position.x)
-		if dir == 0.0:
-			dir = 1.0
+		_walk_direction = signf(global_position.x - source.global_position.x)
+		if _walk_direction == 0.0:
+			_walk_direction = 1.0
+		_walk_remaining = flee_distance_cells * TILE_SIZE
+	_walk(delta)
+
+func _walk(delta: float) -> void:
+	var dir := _walk_direction if _walk_remaining > 0.001 else 0.0
 
 	# 用“正在移动的方向”做守边判定：即使没有声场、正在减速，也不能滑下平台。
 	var facing := dir if absf(dir) > 0.0 else signf(velocity.x)
 	if absf(facing) > 0.0 and is_on_floor():
 		if _try_step_up(facing):
-			if absf(dir) == 0.0:
-				dir = facing
+			_climb(delta)
+			return
 		elif not _has_floor_ahead(facing):
-			if absf(dir) > 0.0:
-				dir = 0.0
-			else:
-				velocity.x = 0.0
+			dir = 0.0
+			velocity.x = 0.0
+			_walk_remaining = 0.0
 
 	if absf(dir) > 0.0:
-		velocity.x = dir * move_speed
+		velocity.x = dir * minf(move_speed, _walk_remaining / delta)
 	else:
-		velocity.x = move_toward(velocity.x, 0.0, move_speed * 8.0 * delta)
+		velocity.x = 0.0
 	velocity.y = minf(velocity.y + gravity * delta, 1000.0)
+	var before_x := global_position.x
 	_move_and_emit()
+	_walk_remaining = maxf(0.0, _walk_remaining - absf(global_position.x - before_x))
 
-	var idle := source == null and is_on_floor() and absf(velocity.x) < 1.0
+	# 被蓝框驱赶但停在墙边/平台边缘时也会叫。
+	var idle := is_on_floor() and absf(velocity.x) < 1.0
 	if idle:
 		_idle_wave_timer += delta
 		if _idle_wave_timer >= idle_wave_interval:
@@ -102,26 +126,93 @@ func _walk(delta: float, source: SoundField) -> void:
 		_idle_wave_timer = 0.0
 
 func _move_and_emit() -> void:
-	var pre_x := global_position.x
+	var before := global_position
 	move_and_slide()
-	_wave_distance += absf(global_position.x - pre_x)
-	while _wave_distance >= wave_interval_pixels:
-		_wave_distance -= wave_interval_pixels
+	_emit_travel_waves(absf(global_position.x - before.x))
+
+func _emit_travel_waves(distance: float) -> void:
+	_wave_distance += distance
+	var interval := maxf(1.0, wave_interval_pixels)
+	while _wave_distance >= interval:
+		_wave_distance -= interval
 		_spawn_wave(move_wave_side_cells * TILE_SIZE)
 
-## 贴着 1 格高的台阶时可以向上抬 16px 继续前进；2 格高的墙不会爬。
+## 先检查完整的一格台阶路径，再转身、贴侧面向上爬、转回并爬上台面。
 func _try_step_up(dir: float) -> bool:
-	if _step_cooldown > 0.0 or not is_on_wall() or not is_on_floor():
+	if not is_on_floor():
 		return false
-	if test_move(global_transform, Vector2.UP * (TILE_SIZE + 2.0)):
+	# 主动探测侧壁，避免守边射线进入台阶内部后先把动物拦住。
+	var wall := KinematicCollision2D.new()
+	if not test_move(global_transform, Vector2(dir * STEP_PROBE, 0.0), wall):
 		return false
-	var raised := global_transform.translated(Vector2(0.0, -(TILE_SIZE + 1.0)))
-	if test_move(raised, Vector2(dir * (TILE_SIZE * 0.75), 0.0)):
+	if wall.get_normal().dot(Vector2(-dir, 0.0)) < 0.9:
 		return false
-	global_position = raised.origin
-	velocity.y = 0.0
-	_step_cooldown = 0.1
+	var rise := Vector2.UP * (TILE_SIZE + STEP_CLEARANCE)
+	if test_move(global_transform, rise):
+		return false
+	var raised := global_transform.translated(rise)
+	# 先让身体中心越过台阶侧面，保留下一阶的净空，支持连续一格宽的楼梯。
+	var across := Vector2(dir * (TILE_SIZE * 0.75), 0.0)
+	if _walk_remaining < absf(across.x):
+		_walk_remaining = 0.0
+		return false
+	var landing := raised.translated(across)
+	var support := KinematicCollision2D.new()
+	# 高墙也先爬一格；到这个高度仍不能上台面，就松开侧壁掉回地面。
+	_climb_can_land = not test_move(raised, across) \
+		and test_move(landing, Vector2.DOWN * (STEP_CLEARANCE + 1.0), support) \
+		and support.get_normal().dot(Vector2.UP) >= 0.9
+	_climb_top = raised.origin
+	_climb_target = landing.origin
+	_climb_angle = -dir * PI * 0.5
+	_turn_elapsed = 0.0
+	_climb_phase = ClimbPhase.TURN_UP
+	_idle_wave_timer = 0.0
+	velocity = Vector2.ZERO
 	return true
+
+func _climb(delta: float) -> void:
+	velocity = Vector2.ZERO
+	if _climb_phase == ClimbPhase.TURN_UP or _climb_phase == ClimbPhase.TURN_FORWARD:
+		_turn_elapsed = minf(_turn_elapsed + delta, TURN_DURATION)
+		var t := _turn_elapsed / TURN_DURATION
+		if _sprite != null:
+			_sprite.rotation = lerpf(0.0, _climb_angle, t) if _climb_phase == ClimbPhase.TURN_UP \
+				else lerpf(_climb_angle, 0.0, t)
+		if _turn_elapsed >= TURN_DURATION:
+			if _climb_phase == ClimbPhase.TURN_FORWARD and not _climb_can_land:
+				_walk_remaining = 0.0
+				_clear_climb()
+				return
+			_climb_phase = ClimbPhase.RISE if _climb_phase == ClimbPhase.TURN_UP else ClimbPhase.MOVE_ONTO
+			_turn_elapsed = 0.0
+		return
+
+	var target := _climb_top if _climb_phase == ClimbPhase.RISE else _climb_target
+	var motion := global_position.direction_to(target) * minf(move_speed * delta, global_position.distance_to(target))
+	var before := global_position
+	var collision := move_and_collide(motion)
+	_walk_remaining = maxf(0.0, _walk_remaining - absf(global_position.x - before.x))
+	_emit_travel_waves(global_position.distance_to(before))
+	# 爬到一半路径被新碰撞挡住时停止攀爬，让重力接管。
+	if collision != null:
+		_walk_remaining = 0.0
+		_clear_climb()
+		return
+	if global_position.distance_to(target) < 0.01:
+		if _climb_phase == ClimbPhase.RISE:
+			_climb_phase = ClimbPhase.TURN_FORWARD
+		else:
+			_clear_climb()
+			# 刷新落地状态，下一帧继续正常行走和守边。
+			velocity.y = gravity * delta
+			_move_and_emit()
+
+func _clear_climb() -> void:
+	_climb_phase = ClimbPhase.NONE
+	_turn_elapsed = 0.0
+	if _sprite != null:
+		_sprite.rotation = 0.0
 
 ## 前进方向的前缘下方 12px 是否有地板；没有就停在平台边缘。
 func _has_floor_ahead(dir: float) -> bool:
@@ -132,7 +223,10 @@ func _has_floor_ahead(dir: float) -> bool:
 	query.exclude = [get_rid()]
 	return not space.intersect_ray(query).is_empty()
 
-func _nearest_lv1_source() -> SoundField:
+func _nearest_new_lv1_source() -> SoundField:
+	for id: int in _seen_lv1.keys():
+		if _seen_lv1[id].get_ref() == null:
+			_seen_lv1.erase(id)
 	if _sound_fields == null or not is_instance_valid(_sound_fields):
 		return null
 	var body_rect := Rect2(global_position - Vector2(8, 8), Vector2(16, 16)).grow(detection_margin)
@@ -144,6 +238,10 @@ func _nearest_lv1_source() -> SoundField:
 		var field := child as SoundField
 		if not field.get_rect().intersects(body_rect):
 			continue
+		var id := field.get_instance_id()
+		if _seen_lv1.has(id):
+			continue
+		_seen_lv1[id] = weakref(field)
 		var distance := global_position.distance_squared_to(field.global_position)
 		if distance < best_distance:
 			best_distance = distance
@@ -170,6 +268,9 @@ func _new_overlapping_lv2() -> SoundField:
 	return null
 
 func _start_knockback(field: SoundField) -> void:
+	_clear_climb()
+	_walk_remaining = 0.0
+	_walk_direction = 0.0
 	var dir := signf(global_position.x - field.global_position.x)
 	if dir == 0.0:
 		dir = 1.0
@@ -191,8 +292,11 @@ func reset_home() -> void:
 	_wave_distance = 0.0
 	_idle_wave_timer = 0.0
 	_knockback_remaining = 0.0
-	_step_cooldown = 0.0
+	_clear_climb()
 	_last_lv2 = null
+	_walk_direction = 0.0
+	_walk_remaining = 0.0
+	_seen_lv1.clear()
 
 func _spawn_wave(side: float) -> void:
 	if _sound_fields == null or not is_instance_valid(_sound_fields):
@@ -208,6 +312,8 @@ func _spawn_wave(side: float) -> void:
 	field.global_position = SoundField.snap_origin_to_grid(global_position, side)
 
 func _draw() -> void:
+	if _sprite != null and _sprite.texture != null:
+		return
 	draw_rect(Rect2(-7, -6, 14, 12), Color.WHITE)
 	draw_rect(Rect2(-4, -3, 2, 2), Color.BLACK)
 	draw_rect(Rect2(2, -3, 2, 2), Color.BLACK)

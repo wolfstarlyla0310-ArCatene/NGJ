@@ -154,10 +154,10 @@ func _test_animal() -> void:
 			"Animal fields last longer and expand slower")
 
 	lv1.queue_free()
-	await frames(40)
+	await frames(120)
 	var x1: float = animal.global_position.x
 	await frames(20)
-	check(absf(animal.global_position.x - x1) < 8.0, "Animal stops when the lv1 field ends")
+	check(absf(animal.global_position.x - x1) < 0.1, "Animal stops after completing its finite blue-triggered travel")
 
 	# lv2 震飞：动物被击飞一段距离后受重力落地。
 	var knock_x: float = animal.global_position.x

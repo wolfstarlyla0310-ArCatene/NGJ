@@ -64,6 +64,8 @@ func _run() -> void:
 		"Rebound lit frame is bottom-right")
 
 	# 1. Paint three door groups in Room1 and place their buttons.
+	# 测试替换按钮前解除管理器缓存，避免物理帧访问已释放的旧按钮。
+	manager.clear()
 	door_tiles.clear()
 	var door_cells: Array[Vector2i] = [
 		Vector2i(20, 11), Vector2i(20, 12), Vector2i(20, 13),
