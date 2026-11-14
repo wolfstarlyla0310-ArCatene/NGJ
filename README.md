@@ -1,6 +1,6 @@
 # ECHO / 同行 · Godot 白盒
 
-**当前玩法：** 纯键盘平台移动 + 分级白色方形声场。**玩家本体不可见**，只能看到自己产生的声场；行走与落地会留下声场，声场可震碎同等级的可破坏图格；红色噪音场中必须待在声场覆盖范围内，否则约 0.1 秒后回到存档点。
+**当前玩法：** 纯键盘平台移动 + 分级白色方形声场。玩家本体使用 `white_thing.png` 贴图显示；行走与落地会留下声场，声场可震碎同级玻璃；红色噪音场中必须待在声场覆盖范围内，否则约 0.1 秒后回到存档点。
 
 Godot **4.7.2 标准版 + GDScript**，无第三方插件，无需 .NET。完整工程入口为根目录 `project.godot`。
 
@@ -128,7 +128,7 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | `addons/room_editor/` | 房间编辑器插件（添加房间 / 校验 / 拖拽手柄） |
 | `scenes/levels/wave_jump_lab.tscn` | 机制测试关 |
 | `scripts/wave_jump_lab.gd` | 测试关的 R、声场生成、噪音生存、鼠标传送 |
-| `scripts/player.gd` | 移动、跳跃、分级声场（玩家本体不绘制） |
+| `scripts/player.gd` | 移动、跳跃、分级声场（本体由 `player.tscn` 的 Sprite2D 显示） |
 | `scripts/sound_field.gd` | 声场视觉效果（中心扩散 + 0.5 秒淡出；白色安全 / 红色致命） |
 | `scripts/world/spike_field.gd` | 刺图格层：定期发射 3 连发红色致命短声场 |
 | `scripts/world/trigger_field.gd` | 触发方块层：玩家站上去每 0.5 秒发一次白色 3 格声场 |
@@ -159,7 +159,7 @@ godot --headless --path . --script res://tests/door_animal_checks.gd
 ```
 
 - `keyboard_movement_checks.gd`：48 项，覆盖跳跃/起跳声场、声场等级与边长、走路/撞墙、玻璃破碎与恢复、噪音、调试传送。
-- `big_map_checks.gd`：21 项，覆盖玩家无可见本体、房间、相机切关、声场扩散、进房存档点绑定、单房间 R、噪音死亡回存档点。
+- `big_map_checks.gd`：21 项，覆盖玩家可见贴图、房间、相机切关、声场扩散、进房存档点绑定、单房间 R、噪音死亡回存档点。
 - `spike_checks.gd`：16 项，覆盖刺层存在、3 连发红色致命声场、边长 48px、不碎玻璃、接触死亡、死亡发出 80px 红色声场、lv2 摧毁与房间重置恢复。
 - `trigger_checks.gd`：7 项，覆盖触发格存在、站上去重复发白色 48px 声场、安全区、不碎玻璃、冷却。
 - `barrier_checks.gd`：7 项，覆盖屏障初始隐藏、任意声场显形、物理层、阻挡玩家、声场结束 0.2 秒后隐去。

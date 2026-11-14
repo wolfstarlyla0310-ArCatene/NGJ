@@ -80,8 +80,9 @@ func _run() -> void:
 	var lv0_side: float = level.player.walk_wave_side_cells * 16.0
 	var lv1_side: float = level.player.landing_lv1_side_cells * 16.0
 	var lv2_side: float = level.player.landing_lv2_side_cells * 16.0
-	# 左侧墙世界右缘 x=128，玩家半宽 8（16×16 碰撞体）
-	var contact_x: float = 128.0 + 8.0
+	# 左侧墙世界右缘 x=128；按当前碰撞体宽度计算接触点。
+	var player_shape: RectangleShape2D = level.player.get_node("CollisionShape2D").shape
+	var contact_x: float = 128.0 + player_shape.size.x * 0.5
 
 	# 1. Jump apex follows jump_height_tiles; landing is a level-1 sound field and never pushes.
 	clear_records()

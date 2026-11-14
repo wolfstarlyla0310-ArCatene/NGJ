@@ -56,10 +56,12 @@ func _run() -> void:
 
 	# 屏障显形后阻挡玩家。
 	var barrier_left := barrier_world.x - 8.0
+	var player_shape: RectangleShape2D = level.player.get_node("CollisionShape2D").shape
+	var half_width := player_shape.size.x * 0.5
 	Input.action_press("move_right")
 	await frames(40)
 	Input.action_release("move_right")
-	check(level.player.global_position.x <= barrier_left - 8.0 + 1.5,
+	check(level.player.global_position.x <= barrier_left - half_width + 1.5,
 		"Barrier blocks the player even while walking against it")
 
 	# 任意声场（红色致命）也能激活。

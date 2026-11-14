@@ -1,5 +1,10 @@
 # 验证记录
 
+2026-11-14（玩家贴图与 12×15 碰撞体）
+
+- `scenes/actors/player.tscn` 新增 `Sprite2D`（`white_thing.png`），碰撞体改为 12×15。测试改为按实际碰撞宽度计算贴墙接触点，大地图测试改为验证玩家可见贴图，屏障阻挡距离按碰撞半宽校验。
+- 六套 headless：48 + 21 + 16 + 7 + 7 + 17 全部通过。
+
 2026-11-14（动物声场更久、扩散更慢）
 
 - `animal.gd`：`wave_lifetime` 默认 0.5 → **1.0 秒**；新增 `wave_expand_duration = 0.5` 并写入动物生成的每个 `SoundField`，扩散比玩家声场更慢。移动 1 格 / 静止 `idle_wave_side_cells`（当前 1.4 格）的尺寸规则不变。

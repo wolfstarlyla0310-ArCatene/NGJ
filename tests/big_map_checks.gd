@@ -23,14 +23,10 @@ func _run() -> void:
 	current_scene = level
 	await frames(2)
 
-	# 1. 玩家没有可视表现（脚本不绘制，也没有贴图子节点）。
-	var has_sprite := level.player.get_node_or_null("Sprite2D") != null \
-		or level.player.get_node_or_null("AnimatedSprite2D") != null
-	var draws_body := false
-	for method in level.player.get_script().get_script_method_list():
-		if String(method.get("name", "")) == "_draw":
-			draws_body = true
-	check(not has_sprite and not draws_body, "Player has no visible body")
+	# 1. 玩家本体由 Sprite2D 贴图显示。
+	var sprite: Sprite2D = level.player.get_node_or_null("Sprite2D")
+	var has_sprite := sprite != null and sprite.texture != null and sprite.visible
+	check(has_sprite, "Player has a visible sprite")
 
 	var rooms: Array[Room] = level.get_rooms()
 	check(rooms.size() >= 2, "Big map has at least two rooms")
