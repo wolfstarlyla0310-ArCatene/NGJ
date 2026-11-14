@@ -34,6 +34,7 @@ func _run() -> void:
 	var start_cell: Vector2i = spikes.local_to_map(spikes.to_local(level.player.global_position))
 	var spike_cell := start_cell + Vector2i(3, 0)
 	spikes.set_cell(spike_cell, 0, Vector2i.ZERO)
+	spikes.refresh_baseline()
 	var spike_world: Vector2 = spikes.to_global(spikes.map_to_local(spike_cell))
 
 	# 测试专用：加快节奏、延长单场寿命，便于计数。
@@ -94,6 +95,23 @@ func _run() -> void:
 	for child in sound_fields.get_children():
 		if child is SoundField:
 			child.queue_free()
+	await frames(2)
+
+	# lv1 不摧毁刺，lv2 摧毁；R 重置恢复。
+	var lv1_side: float = level.player.landing_lv1_side_cells * 16.0
+	level._on_wave(spike_world, lv1_side, 1, "landing")
+	await frames(2)
+	check(spikes.get_cell_source_id(spike_cell) != -1, "Level-1 field does not destroy the spike")
+
+	var lv2_side: float = level.player.landing_lv2_side_cells * 16.0
+	level._on_wave(spike_world, lv2_side, 2, "landing")
+	await frames(2)
+	check(spikes.get_cell_source_id(spike_cell) == -1, "Level-2 field destroys the spike")
+
+	level.reset_to_checkpoint()
+	await frames(2)
+	check(spikes.get_cell_source_id(spike_cell) != -1, "Room reset restores the spike")
+
 	level.breakables.clear_all()
 	level.noise.clear_all()
 	print("\nSpike checks: ", "ALL PASSED" if failures.is_empty() else "%d FAILED" % failures.size())

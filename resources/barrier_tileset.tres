@@ -1,0 +1,13 @@
+[gd_resource type="TileSet" format=3 uid="uid://r7rgbb80mfmc"]
+
+[ext_resource type="Texture2D" uid="uid://rojtbbxwkm0e" path="res://assets/tiles/barrier_tile.svg" id="1_texture"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_barrier"]
+texture = ExtResource("1_texture")
+0:0/0 = 0
+0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+
+[resource]
+physics_layer_0/collision_layer = 1
+physics_layer_0/collision_mask = 0
+sources/0 = SubResource("TileSetAtlasSource_barrier")

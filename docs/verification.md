@@ -1,5 +1,18 @@
 # 验证记录
 
+2026-11-14（声场显形屏障）
+
+- 新增 `assets/tiles/barrier_tile.svg`、`resources/barrier_tileset.tres`（16×16，含整格物理层）与 `scripts/world/barrier_field.gd`：运行时初始隐藏/无碰撞；被任意 `SoundField` 覆盖时 `set_cell` 显形并获得碰撞；声场消失后 0.2 秒擦除。编辑器里保留绘制内容。
+- 大地图新增 `Barriers` 层（`collision_enabled = true`、`sound_fields` 接线）；房间编辑器新增接线校验。
+- 新增 `tests/barrier_checks.gd` 7 项：初始隐藏、物理层、白色声场显形、阻挡玩家、红色声场同样激活、0.2 秒延迟隐去。五套 headless 46 + 21 + 16 + 7 + 7 全部通过。
+
+2026-11-14（lv2 声场摧毁刺；随房间恢复）
+
+- `SpikeField` 新增初始快照 `_baseline`、`refresh_baseline()`、`destroy_in_rect()`、`restore_rect()`；`WorldMap._on_wave` 在 `level == 2` 时摧毁命中的刺格，`reset_to_checkpoint()` 时随存档点房间恢复刺。
+- 刺在运行时仍不可见；「消失」表现为该刺格不再发射红色声场。
+- 测试：`spike_checks.gd` 16 项（新增 lv1 不摧毁、lv2 摧毁、房间重置恢复）；四套 headless 46 + 21 + 16 + 7 全部通过。
+- README 声场表的「当前」边长同步为 Player 脚本实际默认值 2 / 5 / 9 格。
+
 2026-11-14（落地声场 3/5/7 分级；触发方块常显）
 
 - `player.gd`：落地等级阈值改为 `tiles > 6 → lv2`、`tiles > 2 → lv1`（正好 6 格算 lv1）；边长 lv0 3 格（48px）、lv1 5 格（80px）、lv2 7 格（112px）。导出 `walk_wave_side_cells` / `landing_lv1_side_cells` / `landing_lv2_side_cells`，可在 Player 检查器调整。

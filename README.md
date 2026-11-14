@@ -28,10 +28,10 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 
 | 来源 | 等级 | 边长 |
 |---|---|---|
-| 走路（起步立即发一次，之后每移动 32 像素） | lv0 | 3 格 / 48 像素 |
-| 落地落差 ≤ 2 格（≤ 32 像素） | lv0 | 3 格 / 48 像素 |
+| 走路（起步立即发一次，之后每移动 32 像素） | lv0 | 2 格 / 32 像素 |
+| 落地落差 ≤ 2 格（≤ 32 像素） | lv0 | 2 格 / 32 像素 |
 | 落地落差 3~6 格（33~96 像素） | lv1 | 5 格 / 80 像素 |
-| 落地落差 > 6 格（> 96 像素） | lv2 | 7 格 / 112 像素 |
+| 落地落差 > 6 格（> 96 像素） | lv2 | 9 格 / 144 像素 |
 
 等级（lv0/1/2）决定能震碎哪一级玻璃；边长由 Player 检查器里的 `walk_wave_side_cells` / `landing_lv1_side_cells` / `landing_lv2_side_cells` 控制。
 
@@ -59,12 +59,20 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 - 刺声场与玩家声场的扩散/淡出表现一致，但为红色且**致命**：玩家身体碰到红色声场立刻死亡。
 - 刺声场按 **lv0** 处理，**不震碎玻璃**；不提供噪音免疫、也不隐藏噪音。
 - 玩家死亡时（刺或噪音），死亡位置会额外发出一个**红色、边长 5 格 = 80px** 的声场，纯视觉、不致死。
+- 刺接触 **lv2（第三级、最大的落地声场）** 时会被摧毁：该刺格消失，不再发射红色声场；lv0/lv1 不影响它。按 R / 死亡重置存档点房间时会随房间恢复。
 
 ## 触发方块
 
 - 无碰撞箱方块：在 `Triggers` 层用 `trigger_tileset.tres` 直接绘制/刷。图块在编辑器和运行时都显示（当前使用 `assets/tiles/wind.png`）；玩家可以直接穿过。
 - 玩家站在触发格上时，每 **0.5 秒**发出一次**白色 3 格声场**（48px）。它与玩家声场一样是安全区：可以隐藏噪音、提供噪音免疫；**不震碎玻璃**。
 - 冷却由触发层统一控制；站在触发格上会按 0.5 秒持续触发，离开后停止。
+
+## 声场屏障
+
+- 在 `Barriers` 层用 `barrier_tileset.tres` 直接绘制。图块在编辑器里显示为淡蓝色方块，运行时**平时隐藏、无碰撞**，玩家可以直接穿过。
+- 被**任意声场**（玩家白色、触发方块白色、刺/死亡红色）覆盖时**立即显形并获得碰撞**，挡住玩家；玩家紧贴移动时也会被拦住。
+- 声场消失后再保持 **0.2 秒**才隐去。
+- 大地图 `Barriers` 层已接好 `sound_fields`；「校验地图」会检查这条接线。
 
 ## 正式大地图与房间
 
@@ -103,12 +111,14 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | `scripts/sound_field.gd` | 声场视觉效果（中心扩散 + 0.5 秒淡出；白色安全 / 红色致命） |
 | `scripts/world/spike_field.gd` | 刺图格层：定期发射 3 连发红色致命短声场 |
 | `scripts/world/trigger_field.gd` | 触发方块层：玩家站上去每 0.5 秒发一次白色 3 格声场 |
+| `scripts/world/barrier_field.gd` | 声场屏障层：被任意声场覆盖时显形挡人，声场消失 0.2 秒后隐去 |
 | `scripts/breakables.gd` | 图格绘制转碰撞、同级声场震碎、按房间恢复 |
 | `scripts/noise_field.gd` | 红色绘制转噪音区域 |
 | `resources/whitebox_tileset.tres` | 16×16、47 格黑白 blob 地形图集，含完整物理层 |
 | `resources/lv1_tileset.tres`、`lv2_tileset.tres`、`noise_tileset.tres` | 玻璃与噪音瓦片集 |
 | `resources/spike_tileset.tres`、`assets/tiles/spike_tile.svg` | 刺图格的编辑器可见标记（运行时刺层隐藏） |
 | `resources/trigger_tileset.tres`、`assets/tiles/wind.png` | 触发方块的可见 16×16 图块（常显、无碰撞） |
+| `resources/barrier_tileset.tres`、`assets/tiles/barrier_tile.svg` | 声场屏障图块（编辑器可见、含物理层） |
 
 跳跃高度与行走发波间隔在 `scripts/player.gd` 的 `jump_height_tiles`、`walk_wave_interval_tiles` 中调整；走路/lv1/lv2 落地声场边长在 `walk_wave_side_cells` / `landing_lv1_side_cells` / `landing_lv2_side_cells`（16px 格）中调整。
 
@@ -121,12 +131,14 @@ godot --headless --path . --script res://tests/keyboard_movement_checks.gd
 godot --headless --path . --script res://tests/big_map_checks.gd
 godot --headless --path . --script res://tests/spike_checks.gd
 godot --headless --path . --script res://tests/trigger_checks.gd
+godot --headless --path . --script res://tests/barrier_checks.gd
 ```
 
 - `keyboard_movement_checks.gd`：46 项，覆盖跳跃、声场等级与边长、走路/撞墙、玻璃破碎与恢复、噪音、调试传送。
 - `big_map_checks.gd`：21 项，覆盖玩家无可见本体、房间、相机切关、声场扩散、进房存档点绑定、单房间 R、噪音死亡回存档点。
-- `spike_checks.gd`：13 项，覆盖刺层存在、3 连发红色致命声场、边长 48px、不碎玻璃、接触死亡、死亡发出 80px 红色声场。
+- `spike_checks.gd`：16 项，覆盖刺层存在、3 连发红色致命声场、边长 48px、不碎玻璃、接触死亡、死亡发出 80px 红色声场、lv2 摧毁与房间重置恢复。
 - `trigger_checks.gd`：7 项，覆盖触发格存在、站上去重复发白色 48px 声场、安全区、不碎玻璃、冷却。
+- `barrier_checks.gd`：7 项，覆盖屏障初始隐藏、任意声场显形、物理层、阻挡玩家、声场结束 0.2 秒后隐去。
 
 ## 协作与原型范围
 

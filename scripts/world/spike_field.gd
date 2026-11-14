@@ -20,13 +20,50 @@ extends TileMapLayer
 ## 刺声场震碎的玻璃等级；0 = 不震碎玻璃（lv0）。
 @export var glass_level := 0
 
+const TILE_SIZE := 16.0
+
 var _cycle_elapsed := 0.0
 var _burst_left := 0
 var _burst_timer := 0.0
+## 初始刺格快照：cell -> [source_id, atlas, alternative]；用于随房间重置恢复。
+var _baseline: Dictionary = {}
 
 func _ready() -> void:
 	# 编辑器里显示红色刺图块方便绘制；运行时图格本身不可见，只留下发出的声场。
 	visible = Engine.is_editor_hint()
+	if Engine.is_editor_hint():
+		return
+	refresh_baseline()
+
+## 重新记录当前所有刺格（测试/运行时动态绘制后调用）。
+func refresh_baseline() -> void:
+	_baseline.clear()
+	for cell in get_used_cells():
+		_baseline[cell] = [
+			get_cell_source_id(cell),
+			get_cell_atlas_coords(cell),
+			get_cell_alternative_tile(cell),
+		]
+
+## 擦除与 area 相交的刺格；擦除后它们不再参与后续连发。
+func destroy_in_rect(area: Rect2) -> void:
+	for cell in get_used_cells():
+		if _cell_rect(cell).intersects(area):
+			erase_cell(cell)
+
+## 把 area 内的刺格恢复到初始快照（随存档点房间重置）。
+func restore_rect(area: Rect2) -> void:
+	for cell in get_used_cells():
+		if _cell_rect(cell).intersects(area):
+			erase_cell(cell)
+	for cell in _baseline:
+		if _cell_rect(cell).intersects(area):
+			var data: Array = _baseline[cell]
+			set_cell(cell, int(data[0]), data[1], int(data[2]))
+
+func _cell_rect(cell: Vector2i) -> Rect2:
+	var center := to_global(map_to_local(cell))
+	return Rect2(center - Vector2(TILE_SIZE, TILE_SIZE) * 0.5, Vector2(TILE_SIZE, TILE_SIZE))
 
 func _physics_process(delta: float) -> void:
 	if Engine.is_editor_hint():

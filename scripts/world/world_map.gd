@@ -11,6 +11,7 @@ const RESET_ACTION := &"restart"
 @onready var terrain: TileMapLayer = $Terrain
 @onready var breakables: Breakables = $Breakables
 @onready var noise: NoiseField = $Noise
+@onready var spikes: SpikeField = $Spikes
 @onready var sound_fields: Node2D = $SoundFields
 @onready var rooms_root: Node2D = $Rooms
 @onready var room_camera: RoomCameraController = $RoomCamera
@@ -58,7 +59,10 @@ func _on_wave(origin: Vector2, side: float, level: int, _kind: String) -> void:
 	sound_fields.add_child(field)
 	field.global_position = origin
 	var half := Vector2(side, side) * 0.5
-	breakables.break_in_rect(Rect2(origin - half, Vector2(side, side)), level)
+	var area := Rect2(origin - half, Vector2(side, side))
+	breakables.break_in_rect(area, level)
+	if level == 2:
+		spikes.destroy_in_rect(area)
 
 ## —— 房间 ——
 
@@ -155,6 +159,7 @@ func reset_to_checkpoint() -> void:
 		room = _first_room()
 	if room != null:
 		breakables.restore_rect(room.get_rect())
+		spikes.restore_rect(room.get_rect())
 	for field in sound_fields.get_children():
 		field.queue_free()
 	noise.sync_visibility([])
