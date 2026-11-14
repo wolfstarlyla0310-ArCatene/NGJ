@@ -1,5 +1,15 @@
 # 验证记录
 
+2026-11-14（16px 图格、完整物理层、正式大地图、玩家隐去）
+
+- 三张图集恢复为 CCCAT 原生的 **128×96、16×16 一格**；瓦片集 `texture_region_size = 16×16`、`tile_size = 16×16`，47 格 blob 连接规则与 CCCAT 一致。
+- 白盒地形图集补齐**完整物理层**：47 个图块各有 32 个顶点的整格多边形（16×16），`collision_layer = 1`；大地图 `Terrain` 的 `collision_enabled = true`，画出来的墙直接可站。
+- 玩家本体不再绘制；所有方形扩散波统一命名为「声场」（`ForcePulse` → `SoundField`，`Pulses` → `SoundFields`）。
+- 机制测试关改用直接绘制的 16px 地形（`Terrain/Visual`），移除 `terrain_visual.gd` 与 WallPlatform；玻璃/噪音演示格按 16px 坐标重新烘焙。
+- 新增正式大地图 `scenes/world/big_map.tscn`：两间房、连续 16px 地板、Checkpoint、`RoomCamera` 相机切关、单房间 R、进房自动绑定存档点（只记录坐标，不写磁盘）。
+- 移植 CCCAT 的房间编辑器插件（添加房间 / 校验地图 / 8 向拖拽）。
+- headless 验证：`tests/keyboard_movement_checks.gd` 46 项、`tests/big_map_checks.gd` 18 项全部通过；编辑器插件加载无报错。
+
 2026-11-14，本机 Godot 4.7.2 标准版（Steam 版引擎）。
 
 - 分级声波 / 可破坏图格 / 噪音场 / 调试传送：`tests/keyboard_movement_checks.gd` 共 **46 项全部通过**。

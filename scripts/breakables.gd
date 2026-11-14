@@ -2,9 +2,7 @@ class_name Breakables
 extends Node2D
 ## Painted tile layers become solid cells at runtime; same-level waves erase them.
 
-const TILE_SIZE := 32
-const DEMO_LV1: Array[Vector2i] = [Vector2i(17, 16), Vector2i(18, 16)]
-const DEMO_LV2: Array[Vector2i] = [Vector2i(15, 13)]
+const TILE_SIZE := 16
 
 @onready var lv1: TileMapLayer = $Lv1
 @onready var lv2: TileMapLayer = $Lv2
@@ -13,11 +11,6 @@ var _baseline: Dictionary = {1: {}, 2: {}}
 var _bodies: Dictionary = {1: {}, 2: {}}
 
 func _ready() -> void:
-	if lv1.get_used_cells().is_empty() and lv2.get_used_cells().is_empty():
-		for cell in DEMO_LV1:
-			lv1.set_cell(cell, 0, Vector2i(0, 0))
-		for cell in DEMO_LV2:
-			lv2.set_cell(cell, 0, Vector2i(0, 0))
 	refresh()
 
 func refresh() -> void:
@@ -40,6 +33,7 @@ func break_in_rect(area: Rect2, wave_level: int) -> void:
 		return
 	var layer := _layer(wave_level)
 	var bodies: Dictionary = _bodies[wave_level]
+	var broke_any := false
 	for cell in layer.get_used_cells():
 		var body: StaticBody2D = bodies.get(cell)
 		if not is_instance_valid(body):
@@ -51,6 +45,9 @@ func break_in_rect(area: Rect2, wave_level: int) -> void:
 		body.collision_layer = 0
 		body.queue_free()
 		bodies.erase(cell)
+		broke_any = true
+	if broke_any:
+		_relink(layer)
 
 func reset() -> void:
 	_clear_bodies()
@@ -61,6 +58,22 @@ func reset() -> void:
 		for cell in snapshot:
 			var data: Dictionary = snapshot[cell]
 			layer.set_cell(cell, int(data["source"]), data["atlas"], int(data["alternative"]))
+		_relink(layer)
+	_spawn_all_bodies()
+
+func restore_rect(area: Rect2) -> void:
+	for wave_level in [1, 2]:
+		var layer := _layer(wave_level)
+		var snapshot: Dictionary = _baseline[wave_level]
+		for cell in layer.get_used_cells():
+			if area.has_point(layer.to_global(layer.map_to_local(cell))):
+				layer.erase_cell(cell)
+		for cell in snapshot:
+			if area.has_point(layer.to_global(layer.map_to_local(cell))):
+				var data: Dictionary = snapshot[cell]
+				layer.set_cell(cell, int(data["source"]), data["atlas"], int(data["alternative"]))
+		_relink(layer)
+	_clear_bodies()
 	_spawn_all_bodies()
 
 func clear_all() -> void:
@@ -70,7 +83,9 @@ func clear_all() -> void:
 	_baseline = {1: {}, 2: {}}
 
 func paint_cell(wave_level: int, cell: Vector2i) -> void:
-	_layer(wave_level).set_cell(cell, 0, Vector2i(0, 0))
+	var layer := _layer(wave_level)
+	layer.set_cell(cell, 0, Vector2i(0, 0))
+	_relink(layer)
 
 func has_cell(wave_level: int, cell: Vector2i) -> bool:
 	if wave_level < 1 or wave_level > 2:
@@ -79,6 +94,11 @@ func has_cell(wave_level: int, cell: Vector2i) -> bool:
 
 func _layer(wave_level: int) -> TileMapLayer:
 	return lv1 if wave_level == 1 else lv2
+
+func _relink(layer: TileMapLayer) -> void:
+	var cells := layer.get_used_cells()
+	if not cells.is_empty():
+		layer.set_cells_terrain_connect(cells, 0, 0)
 
 func _clear_bodies() -> void:
 	for wave_level in [1, 2]:

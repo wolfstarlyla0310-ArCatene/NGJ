@@ -2,17 +2,10 @@ class_name NoiseField
 extends TileMapLayer
 ## Painted red cells define the noise area. Cells covered by an active white frame are hidden.
 
-const DEMO_MIN := Vector2i(20, 12)
-const DEMO_SIZE := Vector2i(2, 5)
-
 var _painted: Dictionary = {}  # cell -> {source, atlas, alternative}
 var _hidden: Dictionary = {}
 
 func _ready() -> void:
-	if get_used_cells().is_empty():
-		for x in range(DEMO_MIN.x, DEMO_MIN.x + DEMO_SIZE.x):
-			for y in range(DEMO_MIN.y, DEMO_MIN.y + DEMO_SIZE.y):
-				set_cell(Vector2i(x, y), 0, Vector2i(0, 0))
 	refresh()
 
 func refresh() -> void:

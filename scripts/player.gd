@@ -3,18 +3,18 @@ extends CharacterBody2D
 
 signal wave_emitted(origin: Vector2, side_pixels: float, level: int, kind: String)
 
-const TILE_SIZE: float = 32.0
+const TILE_SIZE: float = 16.0
 const CONTACT_TOLERANCE_PIXELS: float = 0.5
-const WAVE_SIDE_TILES := [3, 5, 7]  # lv0, lv1, lv2
+const WAVE_SIDE_TILES := [6, 10, 14]  # lv0, lv1, lv2（16px 格：96 / 160 / 224 像素）
 
 @export var speed: float = 250.0
 @export var acceleration: float = 1800.0
-@export var jump_height_tiles: float = 3.0
+@export var jump_height_tiles: float = 6.0
 @export var gravity: float = 1500.0
 @export var terminal_fall_speed: float = 1000.0
 @export var coyote_time: float = 0.12
 @export var jump_buffer: float = 0.12
-@export var walk_wave_interval_tiles: float = 1.0
+@export var walk_wave_interval_tiles: float = 2.0
 
 var controls_enabled: bool = false:
 	set(value):
@@ -60,7 +60,6 @@ func _physics_process(delta: float) -> void:
 	if not was_grounded and is_on_floor():
 		_emit_landing_wave()
 	_emit_step_waves(was_grounded, pre_x)
-	queue_redraw()
 
 func _emit_landing_wave() -> void:
 	var drop := maxf(0.0, global_position.y - _fall_apex_y)
@@ -69,9 +68,9 @@ func _emit_landing_wave() -> void:
 	if tiles < 1:
 		return
 	var level := 0
-	if tiles >= 4:
+	if tiles >= 8:
 		level = 2
-	elif tiles >= 2:
+	elif tiles >= 4:
 		level = 1
 	wave_emitted.emit(global_position, float(WAVE_SIDE_TILES[level]) * TILE_SIZE, level, "landing")
 
@@ -105,7 +104,3 @@ func _launch_speed(height_pixels: float, g: float) -> float:
 		return 0.0
 	# Semi-implicit Euler applies gravity before movement; compensate half a physics step.
 	return sqrt(2.0 * g * height_pixels) + g / (2.0 * Engine.physics_ticks_per_second)
-
-func _draw() -> void:
-	draw_rect(Rect2(-12, -20, 24, 40), Color.WHITE)
-	draw_rect(Rect2(-12, -12, 24, 5), Color.BLACK)

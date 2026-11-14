@@ -8,7 +8,7 @@ var _spawn_position: Vector2 = Vector2.ZERO
 var _grace_remaining := GRACE_SECONDS
 
 @onready var player: EchoPlayer = $Player
-@onready var pulses: Node2D = $Pulses
+@onready var sound_fields: Node2D = $SoundFields
 @onready var breakables: Breakables = $Breakables
 @onready var noise: NoiseField = $Noise
 
@@ -43,23 +43,23 @@ func _physics_process(delta: float) -> void:
 
 func _active_pulse_rects() -> Array[Rect2]:
 	var rects: Array[Rect2] = []
-	for child in pulses.get_children():
-		if child is ForcePulse and not child.is_queued_for_deletion():
+	for child in sound_fields.get_children():
+		if child is SoundField and not child.is_queued_for_deletion():
 			var side: float = child.side_length
 			rects.append(Rect2(child.global_position - Vector2(side, side) * 0.5, Vector2(side, side)))
 	return rects
 
 func _inside_active_pulse(point: Vector2) -> bool:
-	for child in pulses.get_children():
-		if child is ForcePulse and not child.is_queued_for_deletion() and child.contains_point(point):
+	for child in sound_fields.get_children():
+		if child is SoundField and not child.is_queued_for_deletion() and child.contains_point(point):
 			return true
 	return false
 
 func _on_wave(origin: Vector2, side: float, level: int, _kind: String) -> void:
-	var pulse := ForcePulse.new()
-	pulse.side_length = side
-	pulses.add_child(pulse)
-	pulse.global_position = origin
+	var field := SoundField.new()
+	field.side_length = side
+	sound_fields.add_child(field)
+	field.global_position = origin
 	var half := Vector2(side, side) * 0.5
 	breakables.break_in_rect(Rect2(origin - half, Vector2(side, side)), level)
 
@@ -75,7 +75,7 @@ func _viewport_to_world(screen_point: Vector2) -> Vector2:
 
 func restart_run() -> void:
 	player.reset_to(_spawn_position)
-	for ring in pulses.get_children():
+	for ring in sound_fields.get_children():
 		ring.queue_free()
 	noise.sync_visibility([])
 	breakables.reset()

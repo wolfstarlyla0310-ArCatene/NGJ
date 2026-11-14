@@ -18,6 +18,12 @@ func frames(count: int) -> void:
 	for _i in range(count):
 		await physics_frame
 
+func settle(limit: int = 180) -> void:
+	for _i in range(limit):
+		await physics_frame
+		if level.player.is_on_floor():
+			return
+
 func release_all() -> void:
 	for action in ["move_left", "move_right", "jump"]:
 		Input.action_release(action)
@@ -67,14 +73,14 @@ func _run() -> void:
 	check(waves.is_empty(), "Cold start emits no sonar")
 
 	level.restart_run()
-	await frames(10)
+	await settle()
 	level.noise.clear_all()
 	level.breakables.clear_all()
 	var ground_y: float = level.player.position.y
-	var left_wall: WallPlatform = level.get_node("Terrain/LeftWall")
-	var contact_x: float = left_wall.bounds().end.x + 12.0
+	# 左侧墙世界右缘 x=128，玩家半宽 8（16×16 碰撞体）
+	var contact_x: float = 128.0 + 8.0
 
-	# 1. Jump apex is three tiles; landing is a level-1 square and never pushes.
+	# 1. Jump apex follows jump_height_tiles; landing is a level-1 sound field and never pushes.
 	clear_records()
 	Input.action_press("jump")
 	await frames(2)
@@ -83,47 +89,49 @@ func _run() -> void:
 	for _i in range(220):
 		await physics_frame
 		apex_y = minf(apex_y, level.player.position.y)
-	check(absf(ground_y - apex_y - 96.0) <= 1.0, "Jump apex is three tiles above the ground")
-	check(count_waves("landing") == 1, "Jump landing emits exactly one landing sonar")
+	var jump_px: float = level.player.jump_height_tiles * 16.0
+	check(absf(ground_y - apex_y - jump_px) <= 1.0,
+		"Jump apex equals jump_height_tiles × 16 px (%.0f px)" % jump_px)
+	check(count_waves("landing") == 1, "Jump landing emits exactly one landing sound field")
 	var jump_sides := wave_sides("landing")
 	var jump_levels := wave_levels("landing")
-	check(jump_sides.size() >= 1 and absf(jump_sides[0] - 160.0) < 0.01, "Three-tile fall emits a five-tile square")
-	check(jump_levels.size() >= 1 and jump_levels[0] == 1, "Three-tile fall is a level-1 wave")
+	check(jump_sides.size() >= 1 and absf(jump_sides[0] - 160.0) < 0.01, "Jump landing emits a 160 px sound field")
+	check(jump_levels.size() >= 1 and jump_levels[0] == 1, "Jump landing is a level-1 sound field")
 	check(level.player.is_on_floor() and absf(level.player.position.y - ground_y) < 1.0, "Landing sonar does not bounce the player")
 
 	# 2. Drop tiers: 1 -> lv0/96, 2-3 -> lv1/160, 4 -> lv2/224.
 	clear_records()
 	level.player.reset_to(Vector2(900, ground_y - 32.0))
 	await frames(150)
-	check(count_waves("landing") == 1, "One-tile drop emits one landing sonar")
-	check(wave_sides("landing")[0] == 96.0 and wave_levels("landing")[0] == 0, "One-tile drop is lv0 / 96 px")
+	check(count_waves("landing") == 1, "32 px drop emits one landing sound field")
+	check(wave_sides("landing")[0] == 96.0 and wave_levels("landing")[0] == 0, "32 px drop is lv0 / 96 px")
 
 	clear_records()
 	level.player.reset_to(Vector2(900, ground_y - 64.0))
 	await frames(150)
-	check(count_waves("landing") == 1, "Two-tile drop emits one landing sonar")
-	check(wave_sides("landing")[0] == 160.0 and wave_levels("landing")[0] == 1, "Two-tile drop is lv1 / 160 px")
-	check(level.player.is_on_floor(), "Two-tile drop settles on the floor")
+	check(count_waves("landing") == 1, "64 px drop emits one landing sound field")
+	check(wave_sides("landing")[0] == 160.0 and wave_levels("landing")[0] == 1, "64 px drop is lv1 / 160 px")
+	check(level.player.is_on_floor(), "64 px drop settles on the floor")
 
 	clear_records()
 	level.player.reset_to(Vector2(900, ground_y - 96.0))
 	await frames(150)
-	check(count_waves("landing") == 1, "Three-tile drop emits one landing sonar")
-	check(wave_sides("landing")[0] == 160.0 and wave_levels("landing")[0] == 1, "Three-tile drop is lv1 / 160 px")
+	check(count_waves("landing") == 1, "96 px drop emits one landing sound field")
+	check(wave_sides("landing")[0] == 160.0 and wave_levels("landing")[0] == 1, "96 px drop is lv1 / 160 px")
 
 	clear_records()
 	level.player.reset_to(Vector2(900, ground_y - 128.0))
 	await frames(150)
-	check(count_waves("landing") == 1, "Four-tile drop emits one landing sonar")
-	check(wave_sides("landing")[0] == 224.0 and wave_levels("landing")[0] == 2, "Four-tile drop is lv2 / 224 px")
+	check(count_waves("landing") == 1, "128 px drop emits one landing sound field")
+	check(wave_sides("landing")[0] == 224.0 and wave_levels("landing")[0] == 2, "128 px drop is lv2 / 224 px")
 
 	clear_records()
-	level.player.reset_to(Vector2(900, ground_y - 20.0))
+	level.player.reset_to(Vector2(900, ground_y - 8.0))
 	await frames(120)
-	check(count_waves("landing") == 0, "Sub-tile drop emits no landing sonar")
-	check(level.player.is_on_floor(), "Player settles after a sub-tile drop")
+	check(count_waves("landing") == 0, "8 px drop emits no landing sound field")
+	check(level.player.is_on_floor(), "Player settles after an 8 px drop")
 
-	# 3. Walking emits a lv0 three-tile square every tile.
+	# 3. Walking emits a lv0 96 px sound field every 32 px.
 	level.restart_run()
 	await frames(10)
 	clear_records()
@@ -135,24 +143,24 @@ func _run() -> void:
 			break
 	Input.action_release("move_right")
 	await frames(25)
-	check(count_waves("step") == 3, "Walking about two tiles emits three step sonars")
+	check(count_waves("step") == 3, "Walking about 65 px emits three step sound fields")
 	var step_sides := wave_sides("step")
 	var step_levels := wave_levels("step")
 	var sides_ok := step_sides.size() == 3
 	for side in step_sides:
 		sides_ok = sides_ok and absf(side - 96.0) < 0.01
-	check(sides_ok, "Every walking square is three tiles wide")
+	check(sides_ok, "Every step sound field is 96 px wide")
 	var levels_ok := step_levels.size() == 3
 	for level_value in step_levels:
 		levels_ok = levels_ok and level_value == 0
-	check(levels_ok, "Walking squares are lv0")
-	check(count_waves("landing") == 0 and waves.size() == count_waves("step"), "Walking emits only step sonar")
-	check(absf(level.player.position.y - ground_y) < 1.0, "Walking sonar does not push the player")
+	check(levels_ok, "Step sound fields are lv0")
+	check(count_waves("landing") == 0 and waves.size() == count_waves("step"), "Walking emits only step sound fields")
+	check(absf(level.player.position.y - ground_y) < 1.0, "Step sound fields do not push the player")
 	var step_origins := wave_origins("step")
 	var spacing_ok := step_origins.size() == 3
 	for i in range(1, step_origins.size()):
 		spacing_ok = spacing_ok and absf(absf(step_origins[i].x - step_origins[i - 1].x) - 32.0) <= 3.0
-	check(spacing_ok, "Step sonars are fixed one tile apart")
+	check(spacing_ok, "Step sound fields are fixed 32 px apart")
 
 	# 4. Walking into the wall emits no landing sonar.
 	level.restart_run()
@@ -164,8 +172,8 @@ func _run() -> void:
 	await frames(90)
 	Input.action_release("move_left")
 	check(absf(level.player.position.x - contact_x) <= 1.0, "Walking into the wall stops at the collision boundary")
-	check(count_waves("landing") == 0, "Walking into a wall emits no landing sonar")
-	check(count_waves("step") == 2, "Walking into a wall only emits its normal step sonar")
+	check(count_waves("landing") == 0, "Walking into a wall emits no landing sound field")
+	check(count_waves("step") == 2, "Walking into a wall only emits its normal step sound fields")
 
 	# 5. Double-tapping a direction gains no extra speed.
 	level.restart_run()
@@ -188,8 +196,8 @@ func _run() -> void:
 
 	# 6. Breakable tiles break only from a same-level wave.
 	level.breakables.clear_all()
-	var lv1_cell := Vector2i(26, 15)
-	var lv2_cell := Vector2i(25, 15)
+	var lv1_cell := Vector2i(53, 31)
+	var lv2_cell := Vector2i(52, 31)
 	level.breakables.paint_cell(1, lv1_cell)
 	level.breakables.paint_cell(2, lv2_cell)
 	level.breakables.refresh()
@@ -221,8 +229,8 @@ func _run() -> void:
 	# 7. Noise field survival with a 0.5 s grace.
 	level.noise.clear_all()
 	var noise_cells: Array[Vector2i] = []
-	for x in range(12, 22):
-		for y in range(10, 17):
+	for x in range(24, 44):
+		for y in range(20, 34):
 			noise_cells.append(Vector2i(x, y))
 	level.noise.paint_cells(noise_cells)
 	await frames(2)
@@ -250,7 +258,7 @@ func _run() -> void:
 	# 7b. Red noise cells under an active white frame are temporarily hidden.
 	level.restart_run()
 	await frames(5)
-	check(not level.noise.is_cell_hidden(Vector2i(12, 16)), "Noise cells start visible")
+	check(not level.noise.is_cell_hidden(Vector2i(25, 33)), "Noise cells start visible")
 	clear_records()
 	Input.action_press("move_right")
 	for _i in range(60):
@@ -259,9 +267,9 @@ func _run() -> void:
 			break
 	Input.action_release("move_right")
 	await frames(2)
-	check(level.noise.is_cell_hidden(Vector2i(12, 16)), "Noise cells inside a white frame turn invisible")
+	check(level.noise.is_cell_hidden(Vector2i(25, 33)), "Noise cells inside a white frame turn invisible")
 	await frames(70)
-	check(not level.noise.is_cell_hidden(Vector2i(12, 16)), "Noise cells reappear after the frame expires")
+	check(not level.noise.is_cell_hidden(Vector2i(25, 33)), "Noise cells reappear after the frame expires")
 
 	deaths_before = level.deaths
 	level.teleport_player(Vector2(400, ground_y))

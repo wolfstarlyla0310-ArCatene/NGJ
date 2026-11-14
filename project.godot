@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="ECHO — 同行 / 白盒测试"
-run/main_scene="res://scenes/levels/wave_jump_lab.tscn"
+run/main_scene="res://scenes/world/big_map.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://assets/icon.svg"
 
@@ -22,6 +22,10 @@ window/size/viewport_height=720
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/room_editor/plugin.cfg")
 
 [input]
 
@@ -62,6 +66,7 @@ common/physics_ticks_per_second=120
 
 [rendering]
 
+textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.025, 0.025, 0.025, 1)

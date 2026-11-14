@@ -1,12 +1,10 @@
-[gd_resource type="TileSet" format=3]
+[gd_resource type="TileSet" format=3 uid="uid://hpebaasxf5vw"]
 
-[ext_resource type="Texture2D" path="res://assets/tiles/noise_tile.svg" id="1_texture"]
+[ext_resource type="Texture2D" uid="uid://cdq4dbe3o7oyk" path="res://assets/tiles/noise_tile.svg" id="1_texture"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_noise"]
 texture = ExtResource("1_texture")
-texture_region_size = Vector2i(32, 32)
 0:0/0 = 0
 
 [resource]
-tile_size = Vector2i(32, 32)
 sources/0 = SubResource("TileSetAtlasSource_noise")
