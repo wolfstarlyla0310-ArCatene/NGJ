@@ -31,7 +31,5 @@ func _physics_process(delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	var half := current_side * 0.5
 	var alpha := lerpf(alpha_min, alpha_max, _pulse)
-	draw_rect(Rect2(-half, -half, current_side, current_side),
-		Color(color.r, color.g, color.b, alpha), false, line_width, true)
+	_draw_pixel_square(Color(color.r, color.g, color.b, alpha))

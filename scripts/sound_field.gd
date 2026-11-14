@@ -47,6 +47,13 @@ func contains_point(world_point: Vector2) -> bool:
 
 func _draw() -> void:
 	var alpha := clampf(1.0 - age / lifetime, 0.0, 1.0)
-	var half := current_side * 0.5
 	var draw_color := Color(color.r, color.g, color.b, color.a * alpha)
-	draw_rect(Rect2(-half, -half, current_side, current_side), draw_color, false, line_width, true)
+	_draw_pixel_square(draw_color)
+
+## 硬边、按像素对齐的方框：关闭抗锯齿，并把四边吸附到整数世界坐标。
+func _draw_pixel_square(draw_color: Color) -> void:
+	var half := maxf(1.0, roundf(current_side * 0.5))
+	var pixel_offset := global_position.round() - global_position
+	draw_rect(
+		Rect2(pixel_offset.x - half, pixel_offset.y - half, half * 2.0, half * 2.0),
+		draw_color, false, line_width, false)

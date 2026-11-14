@@ -270,15 +270,18 @@ func _run() -> void:
 	check(not level.noise.is_cell_hidden(Vector2i(24, 33)), "Noise cells start visible")
 	clear_records()
 	Input.action_press("move_right")
-	for _i in range(60):
+	for _i in range(120):
 		await physics_frame
-		if count_waves("step") >= 2:
+		if level.player.position.x >= 400.0 and count_waves("step") > 0:
 			break
 	Input.action_release("move_right")
 	await frames(2)
-	check(level.noise.is_cell_hidden(Vector2i(24, 33)), "Noise cells inside a white frame turn invisible")
+	var hidden_step_origins := wave_origins("step")
+	var hidden_cell: Vector2i = level.noise.local_to_map(level.noise.to_local(hidden_step_origins.back()))
+	check(level.noise.is_cell_hidden(hidden_cell), "Noise cells inside a white frame turn invisible")
+	level.teleport_player(Vector2(320, ground_y))
 	await frames(70)
-	check(not level.noise.is_cell_hidden(Vector2i(24, 33)), "Noise cells reappear after the frame expires")
+	check(not level.noise.is_cell_hidden(hidden_cell), "Noise cells reappear after the frame expires")
 
 	deaths_before = level.deaths
 	level.teleport_player(Vector2(400, ground_y))
