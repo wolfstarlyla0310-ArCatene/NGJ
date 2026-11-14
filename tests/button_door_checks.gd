@@ -33,6 +33,7 @@ func _typed_cells(cell: Vector2i) -> Array[Vector2i]:
 
 func _run() -> void:
 	level = load("res://scenes/world/big_map.tscn").instantiate()
+	level.get_node("Spikes").clear()
 	level.start_room = level.get_node("Rooms/Room1")
 	root.add_child(level)
 	current_scene = level
@@ -60,8 +61,8 @@ func _run() -> void:
 		"One-shot lit frame is top-right")
 	check(DoorButton.atlas_coords_for(DoorButton.Mode.REBOUND, false) == Vector2i(0, 1),
 		"Rebound idle frame is bottom-left")
-	check(DoorButton.atlas_coords_for(DoorButton.Mode.REBOUND, true) == Vector2i(1, 1),
-		"Rebound lit frame is bottom-right")
+	check(DoorButton.atlas_coords_for(DoorButton.Mode.REBOUND, true) == Vector2i(1, 0),
+		"All lit buttons use the top-right blue frame")
 
 	# 1. Paint three door groups in Room1 and place their buttons.
 	# 测试替换按钮前解除管理器缓存，避免物理帧访问已释放的旧按钮。
@@ -74,6 +75,9 @@ func _run() -> void:
 	]
 	for cell in door_cells:
 		door_tiles.set_cell(cell, 0, Vector2i(3, 2))
+	var scene_button := level.get_node_or_null("Buttons/ButtonOnce4") as DoorButton
+	check(scene_button != null and scene_button.keep_latched_on_reset,
+		"ButtonOnce4 is marked to keep its latch across resets")
 	for child in buttons_root.get_children():
 		child.queue_free()
 	await frames(2)
@@ -124,18 +128,19 @@ func _run() -> void:
 	check(button_a.is_pressed(), "lv1 field presses a button")
 	check(manager.is_door_open(door_a), "Pressed button opens its door")
 	check(door_tiles.get_cell_source_id(Vector2i(20, 11)) == -1, "Open door erases its tiles")
-	check((button_a.get_node("Sprite2D") as Sprite2D).frame_coords == Vector2i(1, 1),
-		"Pressed rebound button uses the lit bottom-right frame")
+	check((button_a.get_node("Sprite2D") as Sprite2D).frame_coords == Vector2i(1, 0),
+		"Pressed rebound button uses the blue top-right frame")
 	f1.queue_free()
 	await frames(3)
 	check(not button_a.is_pressed(), "Rebound button releases when the field ends")
 	check(not manager.is_door_open(door_a), "Rebound door closes when the field ends")
 	check(door_tiles.get_cell_source_id(Vector2i(20, 11)) != -1, "Closed door restores its tiles")
 
-	# 4. lv2 also triggers.
+	# 4. lv2 (yellow) does NOT trigger buttons; only blue lv1 does.
 	var f2 := _spawn_field(sound_fields, Vector2(232, 232), 48.0, 2)
 	await frames(3)
-	check(button_a.is_pressed() and manager.is_door_open(door_a), "lv2 field also triggers the button")
+	check(not button_a.is_pressed() and not manager.is_door_open(door_a),
+		"lv2 field does not trigger the button")
 	f2.queue_free()
 	await frames(3)
 
@@ -150,6 +155,18 @@ func _run() -> void:
 	check(button_b.is_latched() and button_b.is_pressed(), "One-shot button stays latched")
 	check(manager.is_door_open(door_b), "One-shot door stays open")
 	check(door_tiles.get_cell_source_id(Vector2i(24, 11)) == -1, "Latched door remains open")
+
+	var persistent_button: DoorButton = load("res://scenes/world/button_once.tscn").instantiate()
+	persistent_button.keep_latched_on_reset = true
+	persistent_button.position = Vector2(400, 232)
+	buttons_root.add_child(persistent_button)
+	await frames(2)
+	persistent_button.latch()
+	persistent_button.reset_state()
+	check(persistent_button.is_latched(),
+		"Persistent one-shot button keeps its latch across reset")
+	persistent_button.queue_free()
+	await frames(2)
 
 	# 6. Two rebound buttons covered by one wave latch the whole group.
 	var fc := _spawn_field(sound_fields, Vector2(360, 232), 96.0, 1)

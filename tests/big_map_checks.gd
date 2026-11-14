@@ -19,6 +19,8 @@ func frames(count: int) -> void:
 
 func _run() -> void:
 	level = load("res://scenes/world/big_map.tscn").instantiate()
+	# 本套件不测试刺怪，清空刺格避免地图里的怪干扰既有断言。
+	level.get_node("Spikes").clear()
 	# 显式指定一个与玩家初始位置不同的起始房间，验证 Start Room 功能。
 	var rooms_before: Array[Room] = []
 	for child in level.get_node("Rooms").get_children():
@@ -120,6 +122,8 @@ func _run() -> void:
 	var anchor_before: Vector2 = level.get_checkpoint_anchor()
 	level.player.reset_to(room2.get_rect().get_center())
 	await frames(10)
+	check(level.breakables.has_cell(1, c1), "Leaving a room refreshes its glass")
+	check(not level.breakables.has_cell(1, c2), "The entered room's glass stays broken")
 	check(level.get_checkpoint_anchor().distance_to(anchor_before) < 0.5,
 		"Entering a room without touching its checkpoint keeps the old anchor")
 	level.player.reset_to(target2)
@@ -140,7 +144,7 @@ func _run() -> void:
 	level.reset_to_checkpoint()
 	var respawn_position: Vector2 = level.player.global_position
 	await frames(2)
-	check(not level.breakables.has_cell(1, c1), "Reset leaves the start room's glass broken")
+	check(level.breakables.has_cell(1, c1), "Left room's glass stays restored")
 	check(level.breakables.has_cell(1, c2), "Reset restores the other room's glass")
 	check(respawn_position.distance_to(level.get_checkpoint_anchor()) < 0.1,
 		"Reset respawns at the checkpoint")
@@ -168,19 +172,21 @@ func _run() -> void:
 	var deaths_before: int = level.deaths
 	level.player.reset_to(target2)
 	await frames(25)
-	check(level.deaths == deaths_before, "Noise does not kill during the 0.5 s cooldown")
+	check(level.deaths == deaths_before, "Noise does not kill during the cooldown")
 	for _i in range(150):
 		await physics_frame
 		if level.deaths > deaths_before:
 			break
 	check(level.deaths > deaths_before, "Standing in noise without a sound field kills the player")
 	check(level.is_dead(), "Noise death waits for R before resetting")
+	check(not level.player.visible, "Player is hidden on death")
 	var restart_event := InputEventAction.new()
 	restart_event.action = &"restart"
 	restart_event.pressed = true
 	level._unhandled_input(restart_event)
 	await frames(3)
 	check(not level.is_dead(), "R clears the dead state")
+	check(level.player.visible, "R shows the player again")
 	check(level.player.global_position.distance_to(level.get_checkpoint_anchor()) < 40.0,
 		"R respawns at the checkpoint")
 	check(level.breakables.has_cell(1, c2), "R restores the checkpoint room's glass")
@@ -227,6 +233,33 @@ func _run() -> void:
 	check(cp7_node.process_mode == Node.PROCESS_MODE_DISABLED,
 		"Checkpoint7 stays disabled from Room4")
 
+	var button6: Node = level.get_node("Buttons/ButtonOnce3")
+	var button8: Node = level.get_node("Buttons/ButtonOnce5")
+	var glass_lv1: TileMapLayer = level.breakables.lv1
+	var g4: Vector2i = _cell_in_room(glass_lv1, room4)
+	var g5: Vector2i = _cell_in_room(glass_lv1, room5)
+	level.breakables.paint_cell(1, g4)
+	level.breakables.paint_cell(1, g5)
+	level.breakables.refresh()
+	level.breakables.break_in_rect(Rect2(glass_lv1.to_global(glass_lv1.map_to_local(g4)) - Vector2(8, 8), Vector2(16, 16)), 1)
+	level.breakables.break_in_rect(Rect2(glass_lv1.to_global(glass_lv1.map_to_local(g5)) - Vector2(8, 8), Vector2(16, 16)), 1)
+	check(not level.breakables.has_cell(1, g4) and not level.breakables.has_cell(1, g5),
+		"Linked-room glass starts broken")
+	level.player.reset_to(level.get_node("Rooms/Room6").get_rect().get_center())
+	await frames(3)
+	check(level.breakables.has_cell(1, g4) and level.breakables.has_cell(1, g5),
+		"Linked rooms refresh together when leaving")
+	check(button6.process_mode != Node.PROCESS_MODE_DISABLED
+		and button8.process_mode != Node.PROCESS_MODE_DISABLED,
+		"Room6 loads together with Room8")
+	check(cp7_node.process_mode == Node.PROCESS_MODE_DISABLED,
+		"Room7 stays disabled from Room6")
+	level.player.reset_to(level.get_node("Rooms/Room8").get_rect().get_center())
+	await frames(3)
+	check(button6.process_mode != Node.PROCESS_MODE_DISABLED
+		and button8.process_mode != Node.PROCESS_MODE_DISABLED,
+		"Room8 loads together with Room6")
+
 	var animal: Animal = level.get_node("Animals/Animal") as Animal
 	var animal_home: Vector2 = animal._home_position
 	animal.global_position = animal_home + Vector2(48, 0)
@@ -234,6 +267,24 @@ func _run() -> void:
 	await frames(2)
 	check(animal.global_position.distance_to(animal_home) < 0.5,
 		"R reset returns animals to their home position")
+
+	# 动物被驱赶换房：Room2 出生 → 移到 Room1 → 玩家进 Room1 → R 后留在 Room1。
+	var mover: Animal = load("res://scenes/actors/animal.tscn").instantiate()
+	level.add_child(mover)
+	mover.global_position = room2_start.get_rect().get_center()
+	await frames(2)
+	level.player.reset_to(room2_start.get_rect().get_center())
+	await frames(3)
+	mover.global_position = room1_west.get_rect().get_center()
+	level.player.reset_to(room1_west.get_rect().get_center())
+	await frames(3)
+	var rebased_home: Vector2 = mover.home_position()
+	level.reset_to_checkpoint()
+	await frames(2)
+	check(level.room_at(rebased_home) == room1_west
+		and mover.global_position.distance_to(rebased_home) < 0.5,
+		"Animal driven into another room respawns there after R")
+	mover.queue_free()
 
 	level.noise.clear_all()
 	level.breakables.clear_all()

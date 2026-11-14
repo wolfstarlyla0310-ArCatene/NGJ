@@ -55,6 +55,8 @@ var _turn_elapsed := 0.0
 var _climb_can_land := false
 var _walk_direction := 0.0
 var _walk_remaining := 0.0
+var _was_idle := false
+var _alive := true
 var _seen_lv1: Dictionary[int, WeakRef] = {}
 
 @onready var _sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
@@ -69,7 +71,7 @@ func _ready() -> void:
 	call_deferred("_capture_home")
 
 func _physics_process(delta: float) -> void:
-	if Engine.is_editor_hint():
+	if Engine.is_editor_hint() or not _alive:
 		return
 	_prune_last_lv2()
 	var lv2 := _new_overlapping_lv2()
@@ -77,11 +79,13 @@ func _physics_process(delta: float) -> void:
 		_last_lv2 = lv2
 		_start_knockback(lv2)
 	if _knockback_remaining > 0.0:
+		_was_idle = false
 		_knockback_remaining = maxf(0.0, _knockback_remaining - delta)
 		velocity.y = minf(velocity.y + gravity * delta, 1000.0)
 		_move_and_emit()
 		return
 	if _climb_phase != ClimbPhase.NONE:
+		_was_idle = false
 		_climb(delta)
 		return
 	var source := _nearest_new_lv1_source()
@@ -118,12 +122,17 @@ func _walk(delta: float) -> void:
 	# 被蓝框驱赶但停在墙边/平台边缘时也会叫。
 	var idle := is_on_floor() and absf(velocity.x) < 1.0
 	if idle:
+		# 停止移动的第一帧立刻叫一声，之后按 idle_wave_interval 重复。
+		if not _was_idle:
+			_idle_wave_timer = 0.0
+			_spawn_wave(idle_wave_side_cells * TILE_SIZE)
 		_idle_wave_timer += delta
 		if _idle_wave_timer >= idle_wave_interval:
 			_idle_wave_timer = 0.0
 			_spawn_wave(idle_wave_side_cells * TILE_SIZE)
 	else:
 		_idle_wave_timer = 0.0
+	_was_idle = idle
 
 func _move_and_emit() -> void:
 	var before := global_position
@@ -214,11 +223,11 @@ func _clear_climb() -> void:
 	if _sprite != null:
 		_sprite.rotation = 0.0
 
-## 前进方向的前缘下方 12px 是否有地板；没有就停在平台边缘。
+## 前进方向的前缘下方约一格内是否有地板；一格深的沟会走过去，更深则停在边缘。
 func _has_floor_ahead(dir: float) -> bool:
 	var space := get_world_2d().direct_space_state
-	var from := global_position + Vector2(dir * (TILE_SIZE * 0.6), 4.0)
-	var query := PhysicsRayQueryParameters2D.create(from, from + Vector2(0.0, 12.0))
+	var from := global_position + Vector2(dir * (TILE_SIZE * 0.6), TILE_SIZE * 0.5)
+	var query := PhysicsRayQueryParameters2D.create(from, from + Vector2(0.0, TILE_SIZE + 2.0))
 	query.collision_mask = 1
 	query.exclude = [get_rid()]
 	return not space.intersect_ray(query).is_empty()
@@ -236,6 +245,8 @@ func _nearest_new_lv1_source() -> SoundField:
 		if not child is SoundField or child.is_queued_for_deletion() or child.level != 1:
 			continue
 		var field := child as SoundField
+		if field.emitter == self:
+			continue
 		if not field.get_rect().intersects(body_rect):
 			continue
 		var id := field.get_instance_id()
@@ -283,6 +294,28 @@ func _capture_home() -> void:
 	_home_position = global_position
 	_home_captured = true
 
+func home_position() -> Vector2:
+	return _home_position
+
+func is_alive() -> bool:
+	return _alive
+
+## 被怪/门吃掉：隐藏并停止处理，但保留节点，R 时由 reset_home 复活。
+func consume() -> void:
+	if not _alive:
+		return
+	_alive = false
+	velocity = Vector2.ZERO
+	_clear_climb()
+	_walk_remaining = 0.0
+	visible = false
+	set_physics_process(false)
+
+## 玩家进入动物当前所在房间时，把刷新点改到当前位置（Room11 → Room12 场景）。
+func rebase_home() -> void:
+	_home_position = global_position
+	_home_captured = true
+
 ## R / 死亡重置时回到出生位置并清空所有临时状态。
 func reset_home() -> void:
 	if not _home_captured:
@@ -296,7 +329,11 @@ func reset_home() -> void:
 	_last_lv2 = null
 	_walk_direction = 0.0
 	_walk_remaining = 0.0
+	_was_idle = false
 	_seen_lv1.clear()
+	_alive = true
+	set_physics_process(true)
+	visible = process_mode != Node.PROCESS_MODE_DISABLED
 
 func _spawn_wave(side: float) -> void:
 	if _sound_fields == null or not is_instance_valid(_sound_fields):
@@ -305,7 +342,8 @@ func _spawn_wave(side: float) -> void:
 	field.side_length = side
 	field.lifetime = wave_lifetime
 	field.expand_duration = wave_expand_duration
-	field.level = 0
+	field.level = 1
+	field.color = SoundField.color_for_level(1)
 	field.emitter = self
 	field.safe_for_player = true
 	_sound_fields.add_child(field)

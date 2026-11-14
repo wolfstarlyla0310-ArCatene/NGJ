@@ -12,7 +12,8 @@ const CEILING_PROBE_PIXELS: float = 3.0
 @export var acceleration: float = 1800.0
 @export var jump_height_tiles: float = 6.0
 @export var gravity: float = 1500.0
-@export var terminal_fall_speed: float = 1000.0
+## 玩家最大下落速度（像素/秒）；检查器可调。
+@export var terminal_fall_speed: float = 200.0
 @export var coyote_time: float = 0.12
 @export var jump_buffer: float = 0.12
 @export var walk_wave_interval_tiles: float = 2.0

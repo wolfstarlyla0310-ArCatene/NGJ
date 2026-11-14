@@ -19,6 +19,7 @@ func frames(count: int) -> void:
 
 func _run() -> void:
 	level = load("res://scenes/world/big_map.tscn").instantiate()
+	level.get_node("Spikes").clear()
 	root.add_child(level)
 	current_scene = level
 	for _i in range(120):

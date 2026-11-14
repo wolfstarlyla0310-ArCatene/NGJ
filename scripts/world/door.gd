@@ -58,7 +58,8 @@ func _eat(creature: Node) -> void:
 		if world != null and world.has_method("_die"):
 			world.call("_die")
 	elif creature is Animal:
-		creature.queue_free()
+		if creature.has_method("consume"):
+			creature.call("consume")
 		_consume()
 
 func _consume() -> void:

@@ -252,6 +252,19 @@ func _run() -> void:
 	check(count_waves("landing") == 0, "8 px drop emits no landing sound field")
 	check(level.player.is_on_floor(), "Player settles after an 8 px drop")
 
+	# 2b. Terminal fall speed clamps the player's maximum fall speed.
+	level.restart_run()
+	await settle()
+	var original_terminal: float = level.player.terminal_fall_speed
+	level.player.terminal_fall_speed = 120.0
+	level.player.reset_to(Vector2(900, ground_y - 128.0))
+	await frames(10)
+	check(level.player.velocity.y <= 120.5, "Fall speed is clamped by terminal_fall_speed")
+	await settle()
+	level.player.terminal_fall_speed = original_terminal
+	level.restart_run()
+	await settle()
+
 	# 3. Walking emits a lv0 96 px sound field every 32 px.
 	level.restart_run()
 	await settle()
@@ -367,7 +380,7 @@ func _run() -> void:
 	check(level.breakables.has_cell(1, lv1_cell), "Level-2 wave leaves the level-1 cell intact")
 	level.breakables.clear_all()
 
-	# 7. Noise field survival with a 0.5 s grace.
+	# 7. Noise field survival with a configurable grace.
 	level.noise.clear_all()
 	var noise_cells: Array[Vector2i] = []
 	for x in range(24, 44):
@@ -381,16 +394,16 @@ func _run() -> void:
 	var deaths_before: int = level.deaths
 	level.teleport_player(Vector2(400, ground_y))
 	await frames(5)
-	check(level.deaths == deaths_before, "Standing in noise survives the first 0.5 s")
+	check(level.deaths == deaths_before, "Standing in noise survives the grace period")
 	await frames(20)
-	check(level.deaths == deaths_before, "Noise does not kill during the 0.5 s cooldown")
+	check(level.deaths == deaths_before, "Noise does not kill during the cooldown")
 	var died := false
 	for _i in range(150):
 		await physics_frame
 		if level.deaths > deaths_before:
 			died = true
 			break
-	check(died and level.deaths == deaths_before + 1, "Noise kills once the 0.5 s cooldown ends")
+	check(died and level.deaths == deaths_before + 1, "Noise kills once the cooldown ends")
 	check(absf(level.player.position.x - 320.0) < 5.0, "Death respawns at the level start")
 
 	level.restart_run()
@@ -468,7 +481,7 @@ func _run() -> void:
 	check(not level.noise.touches_rect(Rect2(cover_rect.end + Vector2(4, 4), Vector2(12, 12))),
 		"A body rect outside noise does not touch it")
 
-	# 7e. Body-edge contact starts the 0.5 s cooldown while the center stays outside noise.
+	# 7e. Body-edge contact starts the grace while the center stays outside noise.
 	level.noise.clear_all()
 	var edge_cell: Vector2i = level.noise.local_to_map(level.noise.to_local(Vector2(344, ground_y)))
 	var edge_cells: Array[Vector2i] = [edge_cell]

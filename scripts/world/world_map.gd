@@ -4,8 +4,10 @@ extends Node2D
 signal room_reset(room: Room)
 signal checkpoint_changed(room: Room, anchor: Vector2)
 
-const GRACE_SECONDS := 0.5
 const RESET_ACTION := &"restart"
+
+## 玩家接触噪音格且不在安全声场内时，多久后死亡（秒）。检查器可调。
+@export var noise_grace_seconds := 0.3
 
 ## 可选：游戏开始时从哪个房间开始。留空则使用玩家在场景里的初始房间。
 ## 设置后玩家会被放到该房间的 Checkpoint（没有则房间中心），并绑定该存档点。
@@ -27,7 +29,7 @@ var _checkpoint_position := Vector2.ZERO
 var _checkpoint_room: Room = null
 var _active_checkpoint: Checkpoint = null
 var _checkpoints: Array[Checkpoint] = []
-var _grace_remaining := GRACE_SECONDS
+var _grace_remaining := 0.0
 ## 当前按房间裁剪所依据的玩家房间；房间不变时不做任何遍历。
 var _culled_room: Room = null
 ## 死亡后停在原地，等玩家按 R 才重置。
@@ -35,6 +37,7 @@ var _dead := false
 
 func _ready() -> void:
 	process_physics_priority = 100
+	_grace_remaining = noise_grace_seconds
 	add_to_group("world_map")
 	player.wave_emitted.connect(_on_wave)
 	player.controls_enabled = true
@@ -71,14 +74,14 @@ func _physics_process(delta: float) -> void:
 	if _dead:
 		return
 	var player_rect := _player_rect()
-	if _touching_lethal_field(player_rect) or spikes.touches_rect(player_rect):
+	if _touching_lethal_field(player_rect):
 		_die()
 		return
 	noise.sync_visibility(_active_sound_field_rects())
 	var center := player.global_position
-	# 身体任意部分碰到噪音就开始 0.5 秒冷却；中心在安全声场内时重置冷却。
+	# 身体任意部分碰到噪音就开始冷却；中心在安全声场内时重置冷却。
 	if not noise.touches_rect(player_rect) or _inside_active_sound_field(center):
-		_grace_remaining = GRACE_SECONDS
+		_grace_remaining = noise_grace_seconds
 		return
 	_grace_remaining = maxf(0.0, _grace_remaining - delta)
 	if _grace_remaining <= 0.0:
@@ -102,8 +105,6 @@ func _on_wave(origin: Vector2, side: float, level: int, _kind: String) -> void:
 	var half := Vector2(side, side) * 0.5
 	var area := Rect2(snapped_origin - half, Vector2(side, side))
 	breakables.break_in_rect(area, level)
-	if level == 2:
-		spikes.destroy_in_rect(area)
 
 ## —— 房间 ——
 
@@ -181,6 +182,7 @@ func _checkpoint_in_room(room: Room) -> Checkpoint:
 func reset_to_checkpoint() -> void:
 	_dead = false
 	player.controls_enabled = true
+	player.visible = true
 	var room := _room_of(_checkpoint_position)
 	if room == null:
 		room = _room_of(player.global_position)
@@ -188,7 +190,7 @@ func reset_to_checkpoint() -> void:
 		room = _first_room()
 	if room != null:
 		breakables.restore_rect(room.get_rect())
-		spikes.restore_rect(room.get_rect())
+	spikes.reset_monsters()
 	for field in sound_fields.get_children():
 		if field is SoundField and not field.persistent:
 			field.queue_free()
@@ -199,7 +201,7 @@ func reset_to_checkpoint() -> void:
 	for animal in get_tree().get_nodes_in_group("animal"):
 		if animal.has_method("reset_home"):
 			animal.call("reset_home")
-	_grace_remaining = GRACE_SECONDS
+	_grace_remaining = noise_grace_seconds
 	if room != null:
 		for door in get_tree().get_nodes_in_group("door"):
 			if door is Node2D and room.contains_world_point((door as Node2D).global_position) \
@@ -247,6 +249,7 @@ func _die() -> void:
 	deaths += 1
 	player.controls_enabled = false
 	player.velocity = Vector2.ZERO
+	player.visible = false
 	_spawn_death_field(player.global_position)
 
 func is_dead() -> bool:
@@ -276,13 +279,14 @@ func _update_room_culling(force := false) -> void:
 		return
 	if not force and here == _culled_room:
 		return
+	var previous := _culled_room
 	_culled_room = here
-	var active_rooms: Array[Room] = [here]
-	var linked := _linked_room_for(here)
-	if linked != null:
-		active_rooms.append(linked)
+	_rebase_animals_in_room(here)
+	if previous != null and not force:
+		_refresh_rooms_left(previous, here)
+	var active_rooms := _active_rooms(here)
 	var managed: Array[Node] = []
-	for container_name in ["Objects", "Animals", "Buttons"]:
+	for container_name in ["Objects", "Animals", "Buttons", "Collectibles", "Monsters"]:
 		var container := get_node_or_null(container_name)
 		if container != null:
 			_collect_managed_nodes(container, managed)
@@ -296,27 +300,111 @@ func _update_room_culling(force := false) -> void:
 		var active := node_room == null or active_rooms.has(node_room)
 		node.process_mode = Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
 		if node is CanvasItem:
-			(node as CanvasItem).visible = active
+			var alive := not (node is Animal) or (node as Animal).is_alive()
+			(node as CanvasItem).visible = active and alive
 		if node is Checkpoint:
 			(node as Checkpoint).set_deferred("monitoring", active)
+		if node.is_in_group("collectible") or node.is_in_group("spike_monster"):
+			var area := node as Area2D
+			if area != null:
+				area.set_deferred("monitoring", active)
 
 func _collect_managed_nodes(node: Node, out: Array[Node]) -> void:
 	for child in node.get_children():
 		if child.is_queued_for_deletion():
 			continue
-		if child is Checkpoint or child is Animal or child is DoorButton:
+		if child is Checkpoint or child is Animal or child is DoorButton \
+				or child.is_in_group("collectible") or child.is_in_group("spike_monster"):
 			out.append(child)
 		_collect_managed_nodes(child, out)
+
+## 玩家进入某房间时：已经在该房间里的动物，把刷新点改到这个房间。
+## 用于“把 Room11 的动物赶进 Room12 后，刷新时动物留在 Room12”。
+func _rebase_animals_in_room(room: Room) -> void:
+	if room == null:
+		return
+	for node in get_tree().get_nodes_in_group("animal"):
+		var animal := node as Animal
+		if animal == null or not is_instance_valid(animal):
+			continue
+		if _room_of(animal.global_position) != room:
+			continue
+		if _room_of(animal.home_position()) != room:
+			animal.rebase_home()
+
+## 某个房间 + 联动房间一起加载/刷新。
+func _active_rooms(room: Room) -> Array[Room]:
+	var rooms: Array[Room] = []
+	if room == null:
+		return rooms
+	rooms.append(room)
+	var linked := _linked_room_for(room)
+	if linked != null:
+		rooms.append(linked)
+	return rooms
+
+func _same_room_set(a: Array[Room], b: Array[Room]) -> bool:
+	if a.size() != b.size():
+		return false
+	for room in a:
+		if not b.has(room):
+			return false
+	return true
+
+## 玩家跨出上一个房间（组）时，把上一个加载组整个刷新。
+## 联动组内部移动（prev_set == new_set）不刷新。
+func _refresh_rooms_left(previous: Room, here: Room) -> void:
+	var prev_set := _active_rooms(previous)
+	var new_set := _active_rooms(here)
+	if _same_room_set(prev_set, new_set):
+		return
+	for room in prev_set:
+		_refresh_room(room)
+
+func _refresh_room(room: Room) -> void:
+	if room == null:
+		return
+	breakables.restore_rect(room.get_rect())
+	for door in get_tree().get_nodes_in_group("door"):
+		if door is Node2D and room.contains_world_point((door as Node2D).global_position) \
+				and door.has_method("restore"):
+			door.call("restore")
+	if puzzle_door_manager != null:
+		puzzle_door_manager.reset_room(room)
+	_reset_animals_in_room(room)
+	_reset_monsters_in_room(room)
+
+func _reset_animals_in_room(room: Room) -> void:
+	for node in get_tree().get_nodes_in_group("animal"):
+		var animal := node as Animal
+		if animal == null or not is_instance_valid(animal):
+			continue
+		# 只刷新“还留在这个房间”的动物；被驱赶去别的房间的留给新房间 rebase。
+		if _room_of(animal.home_position()) == room \
+				and _room_of(animal.global_position) == room:
+			animal.reset_home()
+
+func _reset_monsters_in_room(room: Room) -> void:
+	for node in get_tree().get_nodes_in_group("spike_monster"):
+		if not is_instance_valid(node) or not node.has_method("home_position"):
+			continue
+		if _room_of(node.call("home_position")) == room:
+			node.call("reset_home")
 
 ## Room4 与 Room5 联动，两个房间一起加载。
 func _linked_room_for(room: Room) -> Room:
 	if room == null:
 		return null
 	var pair := ""
-	if room.name == &"Room4":
-		pair = "Room5"
-	elif room.name == &"Room5":
-		pair = "Room4"
+	match room.name:
+		&"Room4":
+			pair = "Room5"
+		&"Room5":
+			pair = "Room4"
+		&"Room6":
+			pair = "Room8"
+		&"Room8":
+			pair = "Room6"
 	if pair.is_empty():
 		return null
 	return get_node_or_null("Rooms/" + pair) as Room

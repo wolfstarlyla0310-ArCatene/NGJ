@@ -1,11 +1,12 @@
 extends Node2D
 
-const GRACE_SECONDS := 0.5
+## 玩家接触噪音格且不在安全声场内时，多久后死亡（秒）。检查器可调。
+@export var noise_grace_seconds := 0.3
 
 var active: bool = false
 var deaths: int = 0
 var _spawn_position: Vector2 = Vector2.ZERO
-var _grace_remaining := GRACE_SECONDS
+var _grace_remaining := 0.0
 
 @onready var player: EchoPlayer = $Player
 @onready var sound_fields: Node2D = $SoundFields
@@ -14,6 +15,7 @@ var _grace_remaining := GRACE_SECONDS
 
 func _ready() -> void:
 	process_physics_priority = 100
+	_grace_remaining = noise_grace_seconds
 	_spawn_position = player.global_position
 	player.wave_emitted.connect(_on_wave)
 	_set_active(true)
@@ -33,9 +35,9 @@ func _physics_process(delta: float) -> void:
 	if not active:
 		return
 	var center := player.global_position
-	# 身体任意部分碰到噪音就开始 0.5 秒冷却；中心在声场内时重置冷却。
+	# 身体任意部分碰到噪音就开始冷却；中心在声场内时重置冷却。
 	if not noise.touches_rect(_player_rect()) or _inside_active_pulse(center):
-		_grace_remaining = GRACE_SECONDS
+		_grace_remaining = noise_grace_seconds
 		return
 	_grace_remaining = maxf(0.0, _grace_remaining - delta)
 	if _grace_remaining <= 0.0:
@@ -79,7 +81,7 @@ func _on_wave(origin: Vector2, side: float, level: int, _kind: String) -> void:
 
 func teleport_player(world_point: Vector2) -> void:
 	player.reset_to(world_point)
-	_grace_remaining = GRACE_SECONDS
+	_grace_remaining = noise_grace_seconds
 
 func world_to_screen(world_point: Vector2) -> Vector2:
 	return get_canvas_transform() * world_point
@@ -96,11 +98,11 @@ func restart_run() -> void:
 		ring.queue_free()
 	noise.sync_visibility([])
 	breakables.reset()
-	_grace_remaining = GRACE_SECONDS
+	_grace_remaining = noise_grace_seconds
 	_set_active(true)
 
 func _set_active(value: bool) -> void:
 	active = value
 	player.controls_enabled = value
 	if value:
-		_grace_remaining = GRACE_SECONDS
+		_grace_remaining = noise_grace_seconds

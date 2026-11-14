@@ -31,8 +31,14 @@ func _run() -> void:
 
 func _test_door() -> void:
 	level = load("res://scenes/world/big_map.tscn").instantiate()
+	# 本套件不测试刺怪，清空刺格避免地图里的怪干扰门测试。
+	level.get_node("Spikes").clear()
 	root.add_child(level)
 	current_scene = level
+	await frames(2)
+	# 地图里游荡的动物会撞上门陷阱，干扰门测试；先清掉。
+	for animal in level.get_node("Animals").get_children():
+		animal.queue_free()
 	await frames(2)
 
 	var rooms: Array[Room] = level.get_rooms()
@@ -76,7 +82,7 @@ func _test_door() -> void:
 	check(not door._consumed and door.visible and door._aura != null, "Door restores with its pulse field")
 
 	var door2: Door = load("res://scenes/world/door.tscn").instantiate()
-	door2.global_position = checkpoint_room.get_rect().get_center()
+	door2.global_position = level.player.global_position + Vector2(64, 0)
 	level.add_child(door2)
 	await frames(2)
 	var white2 := SoundField.new()
@@ -125,11 +131,15 @@ func _test_animal() -> void:
 	animal.idle_wave_interval = 0.1
 	await frames(20)
 	var idle_side: float = animal.idle_wave_side_cells * 16.0
-	var idle_found := false
+	var idle_field: SoundField = null
 	for child in sound_fields.get_children():
-		if child is SoundField and child.emitter == animal and child.level == 0 				and absf(child.side_length - idle_side) < 0.01:
-			idle_found = true
-	check(idle_found, "Idle animal emits its configured lv0 sound field")
+		if child is SoundField and child.emitter == animal and child.level == 1 \
+				and absf(child.side_length - idle_side) < 0.01:
+			idle_field = child
+			break
+	check(idle_field != null, "Idle animal emits its configured blue (lv1) sound field")
+	check(idle_field != null and idle_field.color.b > idle_field.color.r
+		and idle_field.color.b > idle_field.color.g, "Animal sound field is blue")
 
 	var lv1 := SoundField.new()
 	lv1.side_length = 80.0
@@ -153,11 +163,19 @@ func _test_animal() -> void:
 			and absf(moving_field.expand_duration - animal.wave_expand_duration) < 0.01,
 			"Animal fields last longer and expand slower")
 
+	animal.idle_wave_interval = 5.0
 	lv1.queue_free()
 	await frames(120)
 	var x1: float = animal.global_position.x
 	await frames(20)
 	check(absf(animal.global_position.x - x1) < 0.1, "Animal stops after completing its finite blue-triggered travel")
+	var stop_idle_found := false
+	for child in sound_fields.get_children():
+		if child is SoundField and child.emitter == animal and child.level == 1 \
+				and absf(child.side_length - animal.idle_wave_side_cells * 16.0) < 0.01:
+			stop_idle_found = true
+			break
+	check(stop_idle_found, "Stopping emits the idle sound field immediately")
 
 	# lv2 震飞：动物被击飞一段距离后受重力落地。
 	var knock_x: float = animal.global_position.x
@@ -210,6 +228,48 @@ func _test_animal() -> void:
 	edge_field.queue_free()
 	edge_animal.queue_free()
 	edge_platform.queue_free()
+	await frames(3)
+
+	# 一格深沟：主平台 + 低一格平台，动物会走下去继续前进。
+	var pit_animal: Animal = load("res://scenes/actors/animal.tscn").instantiate()
+	level.add_child(pit_animal)
+	pit_animal.global_position = Vector2(600, 284)
+	var pit_main := StaticBody2D.new()
+	pit_main.collision_layer = 1
+	pit_main.collision_mask = 0
+	var pit_main_shape := CollisionShape2D.new()
+	var pit_main_rect := RectangleShape2D.new()
+	pit_main_rect.size = Vector2(96, 16)
+	pit_main_shape.shape = pit_main_rect
+	pit_main.add_child(pit_main_shape)
+	level.add_child(pit_main)
+	pit_main.global_position = Vector2(600, 300)
+	var pit_lower := StaticBody2D.new()
+	pit_lower.collision_layer = 1
+	pit_lower.collision_mask = 0
+	var pit_lower_shape := CollisionShape2D.new()
+	var pit_lower_rect := RectangleShape2D.new()
+	pit_lower_rect.size = Vector2(96, 16)
+	pit_lower_shape.shape = pit_lower_rect
+	pit_lower.add_child(pit_lower_shape)
+	level.add_child(pit_lower)
+	pit_lower.global_position = Vector2(688, 316)
+	await frames(4)
+	var pit_field := SoundField.new()
+	pit_field.side_length = 96.0
+	pit_field.lifetime = 3.0
+	pit_field.level = 1
+	pit_field.emitter = level.player
+	pit_field.safe_for_player = true
+	sound_fields.add_child(pit_field)
+	pit_field.global_position = Vector2(560, 284)
+	await frames(90)
+	check(pit_animal.global_position.x > 660.0 and pit_animal.global_position.y >= 296.0,
+		"Animal walks across a one-tile-deep gap")
+	pit_field.queue_free()
+	pit_animal.queue_free()
+	pit_main.queue_free()
+	pit_lower.queue_free()
 	await frames(3)
 
 	# 爬一格：平台上放一个 16px 高的台阶，动物会被 lv1 声场驱赶着爬上去。
@@ -265,7 +325,7 @@ func _test_animal() -> void:
 		sound_fields.add_child(bait)
 		bait.global_position = door.global_position
 		await frames(4)
-	check(not is_instance_valid(animal) or animal.is_queued_for_deletion(), "Door eats the animal")
+	check(not animal.is_alive() and not animal.visible, "Door eats the animal")
 	check(door._consumed, "Door is consumed after eating the animal")
 
 	level.queue_free()

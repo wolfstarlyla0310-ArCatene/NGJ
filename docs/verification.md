@@ -1,5 +1,44 @@
 # 验证记录
 
+2026-11-15（动物 R 复活 / 玩家死亡隐藏 / 刺怪红波视觉 / 跨房间刷新）
+
+- `animal.gd`：被怪/门吃掉改为 `consume()`（隐藏、停止处理、保留节点）；`reset_home()` 复活并恢复可见；新增 `is_alive()`。陷阱门与刺怪改为调用 `consume()`，不再 `queue_free`。
+- `world_map.gd`：死亡时 `player.visible = false`，R 复活恢复；房间裁剪的可见性尊重动物存活状态；跨房间时刷新上一个加载组（玻璃/陷阱门/解谜门与按钮/动物/刺怪），联动组一起刷新、组内移动不刷新；只刷新仍在原房间的动物（被驱赶换房的留给新房间 rebase）。
+- `spike_monster.gd`：不再绘制 tile 贴图；改为每轮 3 个红色 48px 短声场（每格）的纯视觉；新增 `home_position()` 供按房间刷新。命中仍是每格 16×16 的 Area。
+- 测试：`spike_checks` 17→**20**（红波视觉、判定仍按 tile、被吃动物 R 复活）、`big_map_checks` 48→**54**（死亡隐藏贴图、跨房间刷新、联动组一起刷新）、`door_animal_checks` 门吃动物改为 `consume` 断言。八套 headless（本机 Godot 4.5.1）：**80 + 54 + 26 + 40 + 20 + 10 + 7 + 8 全部通过**。
+
+2026-11-15（动物过一格沟 / 蓝色动物声场与按钮 / ButtonOnce4 持久 / 下落限速 / 动物换房刷新）
+
+- `animal.gd`：`_has_floor_ahead` 改为从脚底向下探测约一格，**一格深的沟会走过去**，超过一格仍停在边缘；移动/静止声场改为 **level 1 蓝色**；`_nearest_new_lv1_source` 排除自身发射的声场；新增 `home_position()` / `rebase_home()`。
+- `button.gd`：只接受 **level == 1（蓝色）** 声场；所有按钮点亮帧统一为 **(1,0) 蓝色**；新增 `keep_latched_on_reset`。`big_map.tscn` 的 `ButtonOnce4` 设为 true，死亡/R 后永久保持开启。
+- `world_map.gd`：玩家房间变化时 `_rebase_animals_in_room(room)`，把已在该房间的动物刷新点改到该房间（Room11 的动物被赶进 Room12 → R 后留在 Room12）。
+- `spike_monster.gd`：lv1 推 / lv2 定住只响应**玩家**发出的声场，动物蓝色场不再误触发。
+- `player.gd`：`terminal_fall_speed` 补中文注释（原已是导出参数），新增最大下落速度测试。
+- 测试：`keyboard` 79→**80**、`big_map` 47→**48**、`door_animal` 24→**26**、`button_door` 38→**40**、`spike` 16→**17**；八套 headless（本机 Godot 4.5.1）：**80 + 48 + 26 + 40 + 17 + 10 + 7 + 8 全部通过**。
+
+2026-11-15（刺格变成追击怪）
+
+- `spike_field.gd` 重写：运行时把 `Spikes` 层四邻相连的刺格分组，每组生成一只 `SpikeMonster`（挂到 `Monsters` 容器）；旧红色脉冲/定时器/`destroy_in_rect`/`touches_rect` 删除；`reset_monsters()` 供 R 重置。
+- 新增 `scripts/actors/spike_monster.gd`（Area2D）：无重力、穿墙；按出生房间追击（动物一直追、玩家移动时追、近者优先）；lv1 波推开、lv2 波定住；接触玩家触发死亡、接触动物吃掉动物；`reset_home()`。
+- `world_map.gd`：移除旧 spike 接触/摧毁逻辑；R 重置调用 `spikes.reset_monsters()`；房间裁剪纳入 `Monsters` / `spike_monster`。`big_map.tscn` 新增 `Monsters` 容器。
+- 其它加载大地图的测试（big_map / door_animal / collectible / button_door / trigger）在 `add_child` 前清空 `Spikes`，避免地图里已画的刺变怪干扰既有断言。
+- 测试：`spike_checks.gd` 重写为 **16 项全部通过**。八套 headless（本机 Godot 4.5.1）：**79 + 47 + 24 + 10 + 38 + 7 + 8 + 16 全部通过**。
+
+2026-11-15（动物停止立即发声场 / 噪音冷却可调 / Room6+Room8 联动）
+
+- `animal.gd`：新增 `_was_idle`；从移动/空中进入静止的第一帧立即发一次 `idle_wave_side_cells` 声场，之后按 `idle_wave_interval` 重复；震飞、攀爬、归位时重置该状态。
+- `world_map.gd` / `wave_jump_lab.gd`：`GRACE_SECONDS` 常量改为 `@export var noise_grace_seconds := 0.3`（检查器 `Noise Grace Seconds` 可调），默认 0.5 → **0.3 秒**。
+- `world_map.gd`：`_linked_room_for` 增加 **Room6 ↔ Room8** 联动（与 Room4/Room5 一致）。
+- 测试：`door_animal_checks` 23 → **24**（停止后立即发静止声场）；`big_map_checks` 44 → **47**（Room6/Room8 联动）；keyboard/big_map 噪音文案同步。八套 headless（本机 Godot 4.5.1）：**79 + 47 + 24 + 10 + 38 + 22 + 7 + 8 全部通过**。
+
+2026-11-14（新增星星收集品）
+
+- 新增 `scripts/world/collectible.gd`（`Collectible extends Area2D`）：无物理碰撞，`collision_mask = 2` 只检测玩家；`body_entered` 时发 `collected` 并 `queue_free`；`Sprite2D` 按 `spin_speed` 缓慢旋转。
+- 新增 `scenes/world/collectible.tscn`（`assets/star.png` 16×16 + 16×16 触发区）；`big_map.tscn` 新增 `Collectibles` 容器；房间裁剪纳入收集品（远处房间 `PROCESS_MODE_DISABLED` + 隐藏，恢复时重新开启 monitoring）。
+- 新增 `tests/collectible_checks.gd` 10 项：旋转、玩家接触收集、无物理阻挡、远处房间裁剪且节点不释放。
+- 顺带修正 `door_animal_checks.gd` 门测试夹具：地图动物会撞上门陷阱，测试开始时先清掉动物；门2 改放在玩家旁边的开放位置，避免房间中心现在落在实体内导致传送后掉出触发区。
+- 八套 headless（本机 Godot 4.5.1）：**10 + 79 + 44 + 38 + 22 + 7 + 8 + 23 全部通过**。
+
 2026-11-14（动物归位 / 攀爬 / 守边 / 震飞 + 死亡按 R + 仅当前房间）
 
 - `world_map.gd`：新增 `_dead`；死亡后玩家停在原地、不可操作，`_die()` 不再瞬时重置；按 R 调用 `reset_to_checkpoint()` 才清 dead、启用控制并重置所有 `animal` 组动物。存活时 R 仍是手动重置。
