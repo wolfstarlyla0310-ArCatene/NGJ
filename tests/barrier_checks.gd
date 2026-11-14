@@ -39,7 +39,9 @@ func _run() -> void:
 	barriers.set_cell(cell, 0, Vector2i.ZERO)
 	barriers.refresh_baseline()
 	await frames(2)
-	check(barriers.get_cell_source_id(cell) == -1, "Barrier starts hidden and non-solid")
+	check(barriers.get_cell_source_id(cell) == -1, "Barrier main layer starts inactive (no collision)")
+	var ghost := barriers.get_parent().get_node_or_null("Ghost") as TileMapLayer
+	check(ghost != null and absf(ghost.modulate.a - 0.2) < 0.001 		and ghost.get_cell_source_id(cell) != -1, "Inactive barrier shows as a 20% opacity ghost")
 
 	var barrier_world: Vector2 = barriers.to_global(barriers.map_to_local(cell))
 	check(barriers.collision_enabled and barriers.tile_set.get_physics_layers_count() > 0,
@@ -83,9 +85,11 @@ func _run() -> void:
 		child.queue_free()
 	await frames(3)
 	await frames(6)
-	check(barriers.get_cell_source_id(cell) != -1, "Barrier stays briefly after the field ends")
-	await frames(30)
-	check(barriers.get_cell_source_id(cell) == -1, "Barrier hides after the 0.2 s delay")
+	check(barriers.get_cell_source_id(cell) != -1, "Barrier stays for the extended delay")
+	var extended_frames := int(ceil(barriers.hide_delay * float(Engine.physics_ticks_per_second))) + 10
+	await frames(extended_frames)
+	check(barriers.get_cell_source_id(cell) == -1,
+		"Barrier returns to the inactive 20% ghost after the extended delay")
 
 	level.noise.clear_all()
 	level.breakables.clear_all()

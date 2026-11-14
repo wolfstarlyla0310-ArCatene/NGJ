@@ -1,6 +1,6 @@
 extends Node2D
 
-const GRACE_SECONDS := 0.1
+const GRACE_SECONDS := 0.5
 
 var active: bool = false
 var deaths: int = 0
@@ -33,7 +33,8 @@ func _physics_process(delta: float) -> void:
 	if not active:
 		return
 	var center := player.global_position
-	if not noise.has_point(center) or _inside_active_pulse(center):
+	# 身体任意部分碰到噪音就开始 0.5 秒冷却；中心在声场内时重置冷却。
+	if not noise.touches_rect(_player_rect()) or _inside_active_pulse(center):
 		_grace_remaining = GRACE_SECONDS
 		return
 	_grace_remaining = maxf(0.0, _grace_remaining - delta)
@@ -55,15 +56,26 @@ func _inside_active_pulse(point: Vector2) -> bool:
 			return true
 	return false
 
+func _player_rect() -> Rect2:
+	var shape := player.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if shape != null and shape.shape is RectangleShape2D:
+		var size: Vector2 = (shape.shape as RectangleShape2D).size
+		return Rect2(shape.global_position - size * 0.5, size)
+	return Rect2(player.global_position - Vector2(8, 8), Vector2(16, 16))
+
 func _on_wave(origin: Vector2, side: float, level: int, _kind: String) -> void:
+	var snapped_origin := SoundField.snap_origin_to_grid(origin, side)
 	var field := SoundField.new()
 	field.side_length = side
 	field.level = level
 	field.emitter = player
+	field.color = SoundField.color_for_level(level)
+	if level == 2:
+		field.lifetime = INF  # 大跳常驻；reset 时按非 persistent 清除
 	sound_fields.add_child(field)
-	field.global_position = origin
+	field.global_position = snapped_origin
 	var half := Vector2(side, side) * 0.5
-	breakables.break_in_rect(Rect2(origin - half, Vector2(side, side)), level)
+	breakables.break_in_rect(Rect2(snapped_origin - half, Vector2(side, side)), level)
 
 func teleport_player(world_point: Vector2) -> void:
 	player.reset_to(world_point)

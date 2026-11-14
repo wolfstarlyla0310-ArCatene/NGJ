@@ -30,7 +30,12 @@ func _test_door() -> void:
 	await frames(2)
 
 	var rooms: Array[Room] = level.get_rooms()
-	var room2: Room = rooms[1] if rooms.size() > 1 else rooms[0]
+	var checkpoint_room: Room = level.get_checkpoint_room()
+	var room2: Room = rooms[0]
+	for room in rooms:
+		if room != checkpoint_room:
+			room2 = room
+			break
 	var door: Door = load("res://scenes/world/door.tscn").instantiate()
 	door.global_position = room2.get_rect().get_center()
 	level.add_child(door)
@@ -62,7 +67,6 @@ func _test_door() -> void:
 	await frames(2)
 	check(not door._consumed and door.visible and door._aura != null, "Door restores with its pulse field")
 
-	var checkpoint_room: Room = level.get_checkpoint_room()
 	var door2: Door = load("res://scenes/world/door.tscn").instantiate()
 	door2.global_position = checkpoint_room.get_rect().get_center()
 	level.add_child(door2)
@@ -103,7 +107,9 @@ func _test_animal() -> void:
 	await frames(60)
 	check(animal.is_on_floor(), "Animal is affected by gravity and lands")
 	await frames(5)
-	check(not animal.visible, "Animal has no visible texture")
+	var animal_sprite: Sprite2D = animal.get_node_or_null("Sprite2D")
+	check(animal_sprite != null and animal_sprite.texture != null and animal.visible,
+		"Animal has a visible sprite")
 
 	var sound_fields: Node2D = level.get_node("SoundFields")
 	animal.idle_wave_interval = 0.1
@@ -128,7 +134,7 @@ func _test_animal() -> void:
 
 	var moving_field: SoundField = null
 	for child in sound_fields.get_children():
-		if child is SoundField and child.emitter == animal 				and absf(child.side_length - animal.wave_side) < 0.01:
+		if child is SoundField and child.emitter == animal 				and absf(child.side_length - animal.move_wave_side_cells * 16.0) < 0.01:
 			moving_field = child
 			break
 	check(moving_field != null, "Animal emits its configured move sound fields while moving")

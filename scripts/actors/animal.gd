@@ -2,22 +2,26 @@
 class_name Animal
 extends CharacterBody2D
 ## 受重力影响的动物：附近出现 lv1 声场时向背离声源的方向水平移动，
-## 移动时像玩家一样每 16px 发出一个 1×1 格白色声场。
+## 移动时每 `wave_interval_pixels` 发出一个边长为 `move_wave_side_cells` 格的白色声场。
 
 const TILE_SIZE := 16.0
 
 @export var move_speed := 90.0
 @export var gravity := 1500.0
 @export var detection_margin := 16.0
-@export var wave_side := 16.0
+
+@export_group("声场")
+## 移动时发出的白色声场边长（格；1 格 = 16px）。当前 1 格 = 16px。
+@export_range(0.25, 16.0, 0.25) var move_wave_side_cells := 1.0
 @export var wave_interval_pixels := 16.0
 ## 动物声场持续时间（秒）；比玩家声场更久。
 @export var wave_lifetime := 1.0
 ## 动物声场从中心扩散到目标边长的时间（秒）；比玩家声场更慢。
 @export var wave_expand_duration := 0.5
-## 静止时每隔这么久发一次 2 格 lv0 声场（秒）。
-@export var idle_wave_interval := 1.6
-@export var idle_wave_side_cells := 1.4
+## 静止时每隔这么久发一次声场（秒）。
+@export var idle_wave_interval := 0.5
+## 静止时发出的白色声场边长（格；1 格 = 16px）。当前 1.4 格 = 22.4px。
+@export_range(0.25, 16.0, 0.25) var idle_wave_side_cells := 1.4
 
 var _sound_fields: Node2D = null
 var _wave_distance := 0.0
@@ -47,7 +51,7 @@ func _physics_process(delta: float) -> void:
 	_wave_distance += absf(global_position.x - pre_x)
 	while _wave_distance >= wave_interval_pixels:
 		_wave_distance -= wave_interval_pixels
-		_spawn_wave(wave_side)
+		_spawn_wave(move_wave_side_cells * TILE_SIZE)
 
 	var idle := source == null and is_on_floor() and absf(velocity.x) < 1.0
 	if idle:
@@ -87,7 +91,7 @@ func _spawn_wave(side: float) -> void:
 	field.emitter = self
 	field.safe_for_player = true
 	_sound_fields.add_child(field)
-	field.global_position = global_position
+	field.global_position = SoundField.snap_origin_to_grid(global_position, side)
 
 func _draw() -> void:
 	draw_rect(Rect2(-7, -6, 14, 12), Color.WHITE)

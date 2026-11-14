@@ -1,20 +1,22 @@
 [gd_scene format=3 uid="uid://gwtvsuubk8t4"]
 
 [ext_resource type="Script" uid="uid://bu1vh3e8uw3y2" path="res://scripts/actors/animal.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://cye7hr1trgv05" path="res://assets/animal.png" id="2_hemqq"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_animal"]
-size = Vector2(16, 16)
+size = Vector2(16, 15)
 
 [node name="Animal" type="CharacterBody2D" unique_id=72432523]
-visible = false
 z_index = 4
 collision_layer = 4
 floor_snap_length = 4.0
 script = ExtResource("1_script")
-wave_lifetime = 0.5
-wave_expand_duration = null
-idle_wave_interval = 2.0
-idle_wave_side_cells = 2.0
+move_wave_side_cells = null
+idle_wave_interval = 1.0
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=115833916]
+texture = ExtResource("2_hemqq")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=702784808]
+position = Vector2(0, 0.5)
 shape = SubResource("RectangleShape2D_animal")

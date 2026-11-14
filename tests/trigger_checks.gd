@@ -72,12 +72,12 @@ func _run() -> void:
 	await frames(5)
 	var count_after_first := 0
 	for child in sound_fields.get_children():
-		if child is SoundField and not child.lethal:
+		if child is SoundField and not child.lethal and absf(child.side_length - 48.0) < 0.01:
 			count_after_first += 1
 	await frames(30)
 	var count_later := 0
 	for child in sound_fields.get_children():
-		if child is SoundField and not child.lethal:
+		if child is SoundField and not child.lethal and absf(child.side_length - 48.0) < 0.01:
 			count_later += 1
 	check(count_after_first == 1 and count_later == 1, "Cooldown prevents immediate re-triggering")
 

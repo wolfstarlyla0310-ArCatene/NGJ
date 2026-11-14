@@ -18,6 +18,9 @@ func frames(count: int) -> void:
 	for _i in range(count):
 		await physics_frame
 
+func is_on_grid(value: float) -> bool:
+	return absf(value / 16.0 - roundf(value / 16.0)) < 0.001
+
 func settle(limit: int = 180) -> void:
 	for _i in range(limit):
 		await physics_frame
@@ -67,6 +70,12 @@ func _run() -> void:
 	root.add_child(level)
 	current_scene = level
 	level.player.wave_emitted.connect(record_wave)
+
+	check(SoundField.color_for_level(0) == Color.WHITE, "lv0 player sound field is white")
+	var lv1_blue := SoundField.color_for_level(1)
+	var lv2_yellow := SoundField.color_for_level(2)
+	check(lv1_blue.b > lv1_blue.r and lv1_blue.b > lv1_blue.g, "lv1 player sound field is blue")
+	check(lv2_yellow.r > 0.9 and lv2_yellow.g > 0.8 and lv2_yellow.b < 0.4, "lv2 player sound field is yellow")
 
 	# 0. Cold start must not measure a drop from y=0.
 	await frames(30)
@@ -133,6 +142,14 @@ func _run() -> void:
 	await frames(150)
 	check(count_waves("landing") == 1, "128 px drop emits one landing sound field")
 	check(wave_sides("landing")[0] == lv2_side and wave_levels("landing")[0] == 2, "128 px drop is lv2 / %.0f px" % lv2_side)
+	var lv2_field: SoundField = null
+	for child in level.sound_fields.get_children():
+		if child is SoundField and child.level == 2:
+			lv2_field = child
+			break
+	check(lv2_field != null, "128 px drop leaves a level-2 sound field on the map")
+	check(lv2_field != null and lv2_field.lifetime == INF and not lv2_field.persistent,
+		"Level-2 field has infinite lifetime and is not persistent")
 
 	clear_records()
 	level.player.reset_to(Vector2(900, ground_y - 8.0))
@@ -142,7 +159,12 @@ func _run() -> void:
 
 	# 3. Walking emits a lv0 96 px sound field every 32 px.
 	level.restart_run()
-	await frames(10)
+	await settle()
+	var lv2_after_reset := false
+	for child in level.sound_fields.get_children():
+		if child is SoundField and child.level == 2:
+			lv2_after_reset = true
+	check(not lv2_after_reset, "Restart clears the level-2 field")
 	clear_records()
 	var start_x: float = level.player.position.x
 	Input.action_press("move_right")
@@ -170,6 +192,20 @@ func _run() -> void:
 	for i in range(1, step_origins.size()):
 		spacing_ok = spacing_ok and absf(absf(step_origins[i].x - step_origins[i - 1].x) - 32.0) <= 3.0
 	check(spacing_ok, "Step sound fields are fixed 32 px apart")
+
+	# 3b. Generated fields snap their edges to the 16 px grid.
+	var probe := SoundField.snap_origin_to_grid(Vector2(905, 485), 96.0)
+	check(is_on_grid(probe.x - 48.0) and is_on_grid(probe.y - 48.0),
+		"snap_origin_to_grid puts the field's top-left corner on the grid")
+	var generated_field: SoundField = null
+	for child in level.sound_fields.get_children():
+		if child is SoundField and child.emitter == level.player and child.level == 0:
+			generated_field = child
+	check(generated_field != null, "Walking leaves a generated sound field")
+	if generated_field != null:
+		var field_rect := generated_field.get_rect()
+		check(is_on_grid(field_rect.position.x) and is_on_grid(field_rect.position.y),
+			"Generated sound field edges align to the 16 px grid")
 
 	# 4. Walking into the wall emits no landing sonar.
 	level.restart_run()
@@ -249,9 +285,16 @@ func _run() -> void:
 	var deaths_before: int = level.deaths
 	level.teleport_player(Vector2(400, ground_y))
 	await frames(5)
-	check(level.deaths == deaths_before, "Standing in noise survives the first 0.1 s")
+	check(level.deaths == deaths_before, "Standing in noise survives the first 0.5 s")
 	await frames(20)
-	check(level.deaths == deaths_before + 1, "Standing in noise eventually restarts the run")
+	check(level.deaths == deaths_before, "Noise does not kill during the 0.5 s cooldown")
+	var died := false
+	for _i in range(150):
+		await physics_frame
+		if level.deaths > deaths_before:
+			died = true
+			break
+	check(died and level.deaths == deaths_before + 1, "Noise kills once the 0.5 s cooldown ends")
 	check(absf(level.player.position.x - 320.0) < 5.0, "Death respawns at the level start")
 
 	level.restart_run()
@@ -280,7 +323,7 @@ func _run() -> void:
 	var hidden_cell: Vector2i = level.noise.local_to_map(level.noise.to_local(hidden_step_origins.back()))
 	check(level.noise.is_cell_hidden(hidden_cell), "Noise cells inside a white frame turn invisible")
 	level.teleport_player(Vector2(320, ground_y))
-	await frames(70)
+	await frames(80)
 	check(not level.noise.is_cell_hidden(hidden_cell), "Noise cells reappear after the frame expires")
 
 	deaths_before = level.deaths
@@ -289,14 +332,62 @@ func _run() -> void:
 	Input.action_press("jump")
 	await frames(2)
 	Input.action_release("jump")
-	await frames(30)
-	check(level.deaths == deaths_before + 1, "Jumping out of the frames in noise restarts the run")
+	died = false
+	for _i in range(400):
+		await physics_frame
+		if level.deaths > deaths_before:
+			died = true
+			break
+	check(died and level.deaths == deaths_before + 1, "Jumping out of the frames in noise restarts the run")
 
 	level.restart_run()
 	await frames(5)
 	deaths_before = level.deaths
 	await frames(120)
 	check(level.deaths == deaths_before, "Standing outside noise is always safe")
+
+	# 7c. A noise cell is hidden only when fully covered by a single field.
+	level.noise.clear_all()
+	var cover_cell := Vector2i(30, 33)
+	var cover_cells: Array[Vector2i] = [cover_cell]
+	level.noise.paint_cells(cover_cells)
+	await frames(2)
+	var cover_center: Vector2 = level.noise.to_global(level.noise.map_to_local(cover_cell))
+	var cover_rect := Rect2(cover_center - Vector2(8, 8), Vector2(16, 16))
+	var partial := Rect2(cover_rect.position + Vector2(8, 0), cover_rect.size)
+	var partial_rects: Array[Rect2] = [partial]
+	level.noise.sync_visibility(partial_rects)
+	check(not level.noise.is_cell_hidden(cover_cell), "Partially overlapping field does not hide a noise cell")
+	var full_rects: Array[Rect2] = [cover_rect.grow(2.0)]
+	level.noise.sync_visibility(full_rects)
+	check(level.noise.is_cell_hidden(cover_cell), "Fully covering field hides a noise cell")
+	var no_rects: Array[Rect2] = []
+	level.noise.sync_visibility(no_rects)
+	check(not level.noise.is_cell_hidden(cover_cell), "Clearing fields restores the noise cell")
+
+	# 7d. Body-rect noise contact helper.
+	check(level.noise.touches_rect(cover_rect.grow(-4.0)), "Noise touches a body rect inside a cell")
+	check(level.noise.touches_rect(Rect2(cover_rect.position + Vector2(-2, 4), Vector2(4, 8))),
+		"Noise touches a body rect overlapping a cell edge")
+	check(not level.noise.touches_rect(Rect2(cover_rect.end + Vector2(4, 4), Vector2(12, 12))),
+		"A body rect outside noise does not touch it")
+
+	# 7e. Body-edge contact starts the 0.5 s cooldown while the center stays outside noise.
+	level.noise.clear_all()
+	var edge_cell: Vector2i = level.noise.local_to_map(level.noise.to_local(Vector2(344, ground_y)))
+	var edge_cells: Array[Vector2i] = [edge_cell]
+	level.noise.paint_cells(edge_cells)
+	level.teleport_player(Vector2(334, ground_y))
+	await frames(2)
+	deaths_before = level.deaths
+	await frames(25)
+	check(level.deaths == deaths_before, "Body-edge noise contact survives the cooldown")
+	for _i in range(150):
+		await physics_frame
+		if level.deaths > deaths_before:
+			break
+	check(level.deaths == deaths_before + 1, "Body-edge noise contact kills after the cooldown")
+	check(absf(level.player.position.x - 320.0) < 5.0, "Body-edge death respawns at the level start")
 	level.noise.clear_all()
 
 	# 8. Left-click debug teleport.

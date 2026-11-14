@@ -6,8 +6,8 @@ extends TileMapLayer
 
 @export var sound_fields: Node2D
 @export var breakables: Breakables
-## 刺声场边长（16px 格 × 3 = 48）。
-@export var field_side_length := 48.0
+## 刺声场视觉边长（格）；3 格 = 48px。击杀判定只看刺格本身，不看这个脉冲。
+@export var field_side_cells := 3.0
 ## 单个刺声场存在时间（秒）。
 @export var field_lifetime := 0.2
 ## 每轮连发数量。
@@ -88,14 +88,23 @@ func _emit_burst_wave() -> void:
 		_spawn_field(to_global(map_to_local(cell)))
 
 func _spawn_field(world_position: Vector2) -> void:
+	var side := field_side_cells * TILE_SIZE
 	var field := SoundField.new()
-	field.side_length = field_side_length
+	field.side_length = side
 	field.lifetime = field_lifetime
 	field.color = field_color
-	field.lethal = true
+	# 脉冲只是视觉；致命判定由 WorldMap 用刺格本身（16×16）负责。
+	field.lethal = false
 	field.safe_for_player = false
 	sound_fields.add_child(field)
 	field.global_position = world_position
 	if breakables != null and is_instance_valid(breakables):
-		var half := Vector2(field_side_length, field_side_length) * 0.5
-		breakables.break_in_rect(Rect2(world_position - half, Vector2(field_side_length, field_side_length)), glass_level)
+		var half := Vector2(side, side) * 0.5
+		breakables.break_in_rect(Rect2(world_position - half, Vector2(side, side)), glass_level)
+
+## 玩家/生物的身体矩形是否接触任意一个现存刺格（16×16 本格）。
+func touches_rect(area: Rect2) -> bool:
+	for cell in get_used_cells():
+		if _cell_rect(cell).intersects(area):
+			return true
+	return false

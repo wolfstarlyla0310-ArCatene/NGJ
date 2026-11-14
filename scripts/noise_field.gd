@@ -1,6 +1,10 @@
 class_name NoiseField
 extends TileMapLayer
-## Painted red cells define the noise area. Cells covered by an active white frame are hidden.
+## Painted red cells define the noise area. A cell is hidden only when a single active
+## sound field fully encloses it; partial overlap leaves it visible. Hidden cells are
+## still lethal.
+
+const DEFAULT_TILE_SIZE := Vector2(16.0, 16.0)
 
 var _painted: Dictionary = {}  # cell -> {source, atlas, alternative}
 var _hidden: Dictionary = {}
@@ -21,13 +25,23 @@ func refresh() -> void:
 func has_point(world_point: Vector2) -> bool:
 	return _painted.has(local_to_map(to_local(world_point)))
 
+## 玩家身体矩形是否接触任意噪音格；隐藏的格子仍然致命。
+func touches_rect(world_rect: Rect2) -> bool:
+	var top_left := local_to_map(to_local(world_rect.position))
+	var bottom_right := local_to_map(to_local(world_rect.end - Vector2(0.01, 0.01)))
+	for x in range(mini(top_left.x, bottom_right.x), maxi(top_left.x, bottom_right.x) + 1):
+		for y in range(mini(top_left.y, bottom_right.y), maxi(top_left.y, bottom_right.y) + 1):
+			if _painted.has(Vector2i(x, y)):
+				return true
+	return false
+
 func sync_visibility(pulse_rects: Array[Rect2]) -> void:
 	for cell in _painted:
-		var center := to_global(map_to_local(cell))
-		var cell_rect := Rect2(center - Vector2(16, 16), Vector2(32, 32))
+		var cell_rect := _cell_rect(cell)
 		var covered := false
 		for area in pulse_rects:
-			if area.intersects(cell_rect, true):
+			# 只有被单个声场完整包住（含边线）的格子才隐藏。
+			if area.encloses(cell_rect):
 				covered = true
 				break
 		if covered and not _hidden.has(cell):
@@ -37,6 +51,13 @@ func sync_visibility(pulse_rects: Array[Rect2]) -> void:
 			var data: Dictionary = _painted[cell]
 			set_cell(cell, int(data["source"]), data["atlas"], int(data["alternative"]))
 			_hidden.erase(cell)
+
+func _cell_rect(cell: Vector2i) -> Rect2:
+	var size := DEFAULT_TILE_SIZE
+	if tile_set != null:
+		size = Vector2(tile_set.tile_size)
+	var center := to_global(map_to_local(cell))
+	return Rect2(center - size * 0.5, size)
 
 func is_cell_hidden(cell: Vector2i) -> bool:
 	return _hidden.has(cell)

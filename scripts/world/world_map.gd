@@ -4,8 +4,12 @@ extends Node2D
 signal room_reset(room: Room)
 signal checkpoint_changed(room: Room, anchor: Vector2)
 
-const GRACE_SECONDS := 0.1
+const GRACE_SECONDS := 0.5
 const RESET_ACTION := &"restart"
+
+## 可选：游戏开始时从哪个房间开始。留空则使用玩家在场景里的初始房间。
+## 设置后玩家会被放到该房间的 Checkpoint（没有则房间中心），并绑定该存档点。
+@export var start_room: Room
 
 @onready var player: EchoPlayer = $Player
 @onready var terrain: TileMapLayer = $Terrain
@@ -15,6 +19,7 @@ const RESET_ACTION := &"restart"
 @onready var sound_fields: Node2D = $SoundFields
 @onready var rooms_root: Node2D = $Rooms
 @onready var room_camera: RoomCameraController = $RoomCamera
+@onready var puzzle_door_manager: PuzzleDoorManager = get_node_or_null("DoorManager") as PuzzleDoorManager
 
 var deaths := 0
 
@@ -32,18 +37,38 @@ func _ready() -> void:
 	_collect_checkpoints()
 	room_camera.room_entered.connect(_on_room_entered)
 
-	var start_room := _room_of(player.global_position)
-	if start_room == null:
-		start_room = _first_room()
-	_bind_room_checkpoint(start_room, player.global_position)
+	var explicit_start := _is_explicit_start_room()
+	var spawn_room: Room = start_room if explicit_start else _room_of(player.global_position)
+	if spawn_room == null:
+		spawn_room = _first_room()
+	if explicit_start and spawn_room != null:
+		var anchor := _spawn_anchor(spawn_room)
+		player.reset_to(anchor)
+		_bind_room_checkpoint(spawn_room, anchor)
+	else:
+		_bind_room_checkpoint(spawn_room, player.global_position)
+	if puzzle_door_manager != null:
+		puzzle_door_manager.setup(get_rooms())
+
+func _is_explicit_start_room() -> bool:
+	return start_room != null and is_instance_valid(start_room) \
+		and rooms_root != null and rooms_root.is_ancestor_of(start_room)
+
+func _spawn_anchor(room: Room) -> Vector2:
+	var checkpoint := _checkpoint_in_room(room)
+	if checkpoint != null:
+		return checkpoint.respawn_position()
+	return room.get_rect().get_center()
 
 func _physics_process(delta: float) -> void:
-	if _touching_lethal_field():
+	var player_rect := _player_rect()
+	if _touching_lethal_field(player_rect) or spikes.touches_rect(player_rect):
 		_die()
 		return
 	noise.sync_visibility(_active_sound_field_rects())
 	var center := player.global_position
-	if not noise.has_point(center) or _inside_active_sound_field(center):
+	# 身体任意部分碰到噪音就开始 0.5 秒冷却；中心在安全声场内时重置冷却。
+	if not noise.touches_rect(player_rect) or _inside_active_sound_field(center):
 		_grace_remaining = GRACE_SECONDS
 		return
 	_grace_remaining = maxf(0.0, _grace_remaining - delta)
@@ -55,14 +80,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		reset_to_checkpoint()
 
 func _on_wave(origin: Vector2, side: float, level: int, _kind: String) -> void:
+	var snapped_origin := SoundField.snap_origin_to_grid(origin, side)
 	var field := SoundField.new()
 	field.side_length = side
 	field.level = level
 	field.emitter = player
+	field.color = SoundField.color_for_level(level)
+	if level == 2:
+		field.lifetime = INF  # 大跳常驻；R / 死亡重置时按非 persistent 清除
 	sound_fields.add_child(field)
-	field.global_position = origin
+	field.global_position = snapped_origin
 	var half := Vector2(side, side) * 0.5
-	var area := Rect2(origin - half, Vector2(side, side))
+	var area := Rect2(snapped_origin - half, Vector2(side, side))
 	breakables.break_in_rect(area, level)
 	if level == 2:
 		spikes.destroy_in_rect(area)
@@ -174,6 +203,8 @@ func reset_to_checkpoint() -> void:
 			if door is Node2D and room.contains_world_point((door as Node2D).global_position) \
 					and door.has_method("restore"):
 				door.call("restore")
+		if puzzle_door_manager != null:
+			puzzle_door_manager.reset_room(room)
 		room_reset.emit(room)
 
 ## —— 声场 ——
@@ -192,8 +223,7 @@ func _inside_active_sound_field(point: Vector2) -> bool:
 			return true
 	return false
 
-func _touching_lethal_field() -> bool:
-	var player_rect := _player_rect()
+func _touching_lethal_field(player_rect: Rect2) -> bool:
 	for child in sound_fields.get_children():
 		if child is SoundField and not child.is_queued_for_deletion() \
 				and child.lethal and child.get_rect().intersects(player_rect):
@@ -204,7 +234,7 @@ func _player_rect() -> Rect2:
 	var shape := player.get_node_or_null("CollisionShape2D") as CollisionShape2D
 	if shape != null and shape.shape is RectangleShape2D:
 		var size: Vector2 = (shape.shape as RectangleShape2D).size
-		return Rect2(player.global_position - size * 0.5, size)
+		return Rect2(shape.global_position - size * 0.5, size)
 	return Rect2(player.global_position - Vector2(8, 8), Vector2(16, 16))
 
 ## 玩家死亡：先记下死亡位置，重置到存档点，再在原死亡位置放一个红色死亡声场（纯视觉）。

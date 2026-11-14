@@ -50,16 +50,19 @@ func _run() -> void:
 	check(level.breakables.has_cell(1, glass_cell), "Glass starts intact next to the spike")
 
 	await frames(30)
-	var lethal_fields: Array = []
+	var pulse_side: float = spikes.field_side_cells * 16.0
+	var pulses: Array = []
 	for child in sound_fields.get_children():
-		if child is SoundField and child.lethal:
-			lethal_fields.append(child)
-	check(lethal_fields.size() >= 3, "Spike emits three lethal fields per burst")
-	if not lethal_fields.is_empty():
-		var field: SoundField = lethal_fields[0]
-		check(absf(field.side_length - 48.0) < 0.01, "Spike field side length is 48 px (3 cells)")
-		check(field.color.r > 0.9 and field.color.g < 0.4, "Spike field is red")
-		check(not field.safe_for_player, "Spike field is not a player-safe zone")
+		if child is SoundField and absf(child.side_length - pulse_side) < 0.01:
+			pulses.append(child)
+	check(pulses.size() >= 3, "Spike emits three pulse fields per burst")
+	if not pulses.is_empty():
+		var field: SoundField = pulses[0]
+		check(absf(field.side_length - pulse_side) < 0.01,
+			"Spike pulse side is field_side_cells × 16 (%.1f px)" % pulse_side)
+		check(field.color.r > 0.9 and field.color.g < 0.4, "Spike pulse is red")
+		check(not field.safe_for_player, "Spike pulse is not a player-safe zone")
+		check(not field.lethal, "Spike pulse is visual only; kill uses the spike cell")
 	check(level.breakables.has_cell(1, glass_cell), "Spike field is lv0 and leaves glass intact")
 
 	# 停掉连发、清掉现有刺声场，再单独测试接触死亡。
@@ -67,7 +70,7 @@ func _run() -> void:
 	spikes._burst_left = 0
 	spikes._cycle_elapsed = 0.0
 	for child in sound_fields.get_children():
-		if child is SoundField and child.lethal:
+		if child is SoundField:
 			child.queue_free()
 	await frames(3)
 
@@ -76,13 +79,14 @@ func _run() -> void:
 	var deaths_before: int = level.deaths
 	level.player.reset_to(spike_world)
 	await frames(20)
-	check(level.deaths > deaths_before, "Touching a lethal spike field kills the player")
+	check(level.deaths > deaths_before, "Touching the spike cell kills the player")
 	check(level.player.global_position.distance_to(level.get_checkpoint_anchor()) < 40.0,
 		"Spike death respawns at the checkpoint")
 
 	var death_fields: Array = []
 	for child in sound_fields.get_children():
-		if child is SoundField and not child.lethal and absf(child.side_length - 80.0) < 0.01:
+		if child is SoundField and not child.lethal and not child.safe_for_player \
+				and absf(child.side_length - 80.0) < 0.01:
 			death_fields.append(child)
 	check(death_fields.size() >= 1, "Player death emits an 80 px field")
 	if not death_fields.is_empty():
@@ -107,10 +111,21 @@ func _run() -> void:
 	level._on_wave(spike_world, lv2_side, 2, "landing")
 	await frames(2)
 	check(spikes.get_cell_source_id(spike_cell) == -1, "Level-2 field destroys the spike")
+	var lv2_field: SoundField = null
+	for child in sound_fields.get_children():
+		if child is SoundField and child.level == 2 and child.emitter == level.player:
+			lv2_field = child
+			break
+	check(lv2_field != null and lv2_field.lifetime == INF, "World level-2 wave has infinite lifetime")
 
 	level.reset_to_checkpoint()
 	await frames(2)
 	check(spikes.get_cell_source_id(spike_cell) != -1, "Room reset restores the spike")
+	var lv2_after_reset := false
+	for child in sound_fields.get_children():
+		if child is SoundField and child.level == 2 and child.emitter == level.player:
+			lv2_after_reset = true
+	check(not lv2_after_reset, "Room reset clears the level-2 wave")
 
 	level.breakables.clear_all()
 	level.noise.clear_all()

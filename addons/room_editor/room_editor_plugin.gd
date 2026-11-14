@@ -9,6 +9,9 @@ const OBJECTS_NAME := "Objects"
 const CAMERA_NAME := "Camera"
 const CAMERA_CONTROLLER_SCRIPT := "room_camera_controller.gd"
 const MAP_SCRIPT := "world_map.gd"
+const DOOR_TILES_NAME := "DoorTiles"
+const BUTTONS_NAME := "Buttons"
+const DOOR_MANAGER_NAME := "DoorManager"
 
 const DEFAULT_ROOM_SIZE := Vector2(1152, 648)
 const NEW_ROOM_GAP := 32.0
@@ -233,6 +236,7 @@ func _on_validate_pressed() -> void:
 		problems.append("一间房都没有：请在 %s 下新建 Node2D 并挂 room.gd" % ROOMS_NAME)
 	else:
 		_check_rooms(rooms, problems, hints)
+		_check_start_room_setting(root, rooms, problems, hints)
 
 	if terrain != null and not rooms.is_empty():
 		var loose := 0
@@ -263,6 +267,24 @@ func _on_validate_pressed() -> void:
 	if barriers != null:
 		if barriers.get("sound_fields") == null:
 			problems.append("Barriers.sound_fields 没有接线（请指向 SoundFields 容器）。")
+
+	var door_tiles := _find_node_by_name(root, DOOR_TILES_NAME, "TileMapLayer")
+	if door_tiles != null:
+		if door_tiles.get("tile_set") == null:
+			problems.append("%s 没有 TileSet。" % DOOR_TILES_NAME)
+		elif (door_tiles.get("tile_set") as TileSet).get_physics_layers_count() == 0:
+			problems.append("%s 的 TileSet 没有物理层 —— 门不会挡住玩家。" % DOOR_TILES_NAME)
+		if not bool(door_tiles.get("collision_enabled")):
+			problems.append("%s.collision_enabled 必须为 true。" % DOOR_TILES_NAME)
+		if not rooms.is_empty():
+			_check_layer_cells(root, DOOR_TILES_NAME, rooms, hints)
+
+	var door_manager := _find_node_by_name(root, DOOR_MANAGER_NAME, "Node")
+	if door_manager != null:
+		if door_manager.get("doors_layer") == null:
+			problems.append("DoorManager.doors_layer 没有接线（请指向 %s）。" % DOOR_TILES_NAME)
+		if door_manager.get("buttons_root") == null:
+			problems.append("DoorManager.buttons_root 没有接线（请指向 %s）。" % BUTTONS_NAME)
 
 	if player is Node2D and not rooms.is_empty():
 		if RoomRegistry.room_at(rooms, (player as Node2D).global_position) == null:
@@ -300,6 +322,23 @@ func _check_rooms(rooms: Array[Room], problems: PackedStringArray, hints: Packed
 			if ra.intersects(rooms[j].get_rect(), false):
 				hints.append("房间 %s 与 %s 的矩形有重叠 —— 归属由 %s 下的先后顺序决定。"
 					% [a.name, rooms[j].name, ROOMS_NAME])
+
+func _check_start_room_setting(root: Node, rooms: Array[Room],
+		problems: PackedStringArray, hints: PackedStringArray) -> void:
+	var designated: Variant = root.get("start_room")
+	if designated == null:
+		hints.append("Start Room 留空：开局使用玩家在场景里的初始房间。")
+		return
+	var start := designated as Room
+	if start == null or not rooms.has(start):
+		problems.append("Start Room 指向的不是 Rooms 下的房间。")
+		return
+	var checkpoints: Array[Node] = []
+	_collect_checkpoints(root, checkpoints)
+	for node in checkpoints:
+		if node is Node2D and start.contains_world_point((node as Node2D).global_position):
+			return
+	hints.append("Start Room %s 没有 Checkpoint —— 玩家会从房间中心出生。" % start.name)
 
 func _check_layer_cells(root: Node, path: String, rooms: Array[Room], hints: PackedStringArray) -> void:
 	var layer := root.get_node_or_null(path) as TileMapLayer

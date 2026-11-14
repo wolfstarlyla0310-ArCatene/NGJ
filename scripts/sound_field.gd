@@ -2,7 +2,10 @@ class_name SoundField
 extends Node2D
 ## 声场：方形扩散波的视觉效果。发出后 `expand_duration` 秒内从中心扩散到目标边长，
 ## 之后保持满框，并在 `lifetime` 秒生命周期内淡出。
+## `lifetime = INF` 表示常驻到重置（lv2 玩家落地波）。
 ## 判定（玻璃/噪音/安全）仍按目标尺寸 `side_length` 立即生效，不随视觉扩散。
+
+const TILE_SIZE := 16.0
 
 @export var side_length: float = 96.0
 @export var lifetime: float = 0.5
@@ -25,6 +28,26 @@ var emitter: Node2D = null
 var age: float = 0.0
 ## 当前可视边长；只影响绘制，不影响 contains_point / 世界判定。
 var current_side: float = 0.0
+
+## 玩家声场按等级取色：lv0 白色、lv1 蓝色、lv2 黄色。
+static func color_for_level(field_level: int) -> Color:
+	match field_level:
+		1:
+			return Color(0.3, 0.65, 1.0, 1.0)
+		2:
+			return Color(1.0, 0.9, 0.2, 1.0)
+		_:
+			return Color.WHITE
+
+## 把以 `origin` 为中心、边长为 `side` 的方形声场吸附到 16px 网格：
+## 将声场左上角取整到最近的格线，从而覆盖整格（副作用：中心最多偏移 8px）。
+static func snap_origin_to_grid(origin: Vector2, side: float) -> Vector2:
+	var half := side * 0.5
+	var top_left := origin - Vector2(half, half)
+	var snapped_top_left := Vector2(
+		roundf(top_left.x / TILE_SIZE) * TILE_SIZE,
+		roundf(top_left.y / TILE_SIZE) * TILE_SIZE)
+	return snapped_top_left + Vector2(half, half)
 
 func _physics_process(delta: float) -> void:
 	age += delta

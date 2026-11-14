@@ -19,6 +19,18 @@ func frames(count: int) -> void:
 
 func _run() -> void:
 	level = load("res://scenes/world/big_map.tscn").instantiate()
+	# 显式指定一个与玩家初始位置不同的起始房间，验证 Start Room 功能。
+	var rooms_before: Array[Room] = []
+	for child in level.get_node("Rooms").get_children():
+		if child is Room:
+			rooms_before.append(child)
+	var authored_room := RoomRegistry.room_at(rooms_before, level.get_node("Player").global_position)
+	var start_target: Room = rooms_before[0]
+	for room in rooms_before:
+		if room != authored_room:
+			start_target = room
+			break
+	level.start_room = start_target
 	root.add_child(level)
 	current_scene = level
 	await frames(2)
@@ -30,26 +42,52 @@ func _run() -> void:
 
 	var rooms: Array[Room] = level.get_rooms()
 	check(rooms.size() >= 2, "Big map has at least two rooms")
-	var room1: Room = rooms[0]
-	var room2: Room = rooms[1]
+	var start_room: Room = level.room_at(level.player.global_position)
+	check(start_room != null, "Player starts inside a room")
+	if level.start_room != null:
+		check(start_room == level.start_room, "Player starts in the configured Start Room")
+	var room1: Room = start_room
+	var room2: Room = _other_room(rooms, start_room)
+	check(room1 != null and room2 != null and room1 != room2, "Start room and another room exist")
 	var camera: Camera2D = level.get_node("Camera")
 	var viewport_size := camera.get_viewport_rect().size
 
 	# 2. 初始房间、初始存档点、初始相机取景。
-	var start_room: Room = level.room_at(level.player.global_position)
-	check(start_room == room1, "Player starts inside the first room")
 	var cp1 := _checkpoint_in_room(room1)
 	if cp1 != null:
 		check(level.get_checkpoint_anchor().distance_to(cp1.respawn_position()) < 0.5,
-			"Start checkpoint is the first room's Checkpoint")
+			"Start checkpoint is the start room's Checkpoint")
 	else:
 		check(level.get_checkpoint_anchor().distance_to(level.player.global_position) < 1.0,
 			"Start checkpoint records the player position")
 	check(level.get_checkpoint_room() == start_room, "Start checkpoint belongs to the player's room")
 	check(camera.global_position.distance_to(room1.get_rect().get_center()) < 2.0,
-		"Camera starts centered on the first room")
+		"Camera starts centered on the start room")
 	check(absf(camera.zoom.x - _fit_zoom(room1, viewport_size)) < 0.02,
-		"Camera zooms to fit the first room")
+		"Camera zooms to fit the start room")
+
+	# 2b. 每个存档点每 0.2 秒发一次 5 格（80px）白色安全声场。
+	await frames(2)
+	var cp_field: SoundField = null
+	for child in level.sound_fields.get_children():
+		if child is SoundField and child.emitter == null and absf(child.side_length - 80.0) < 0.01:
+			cp_field = child
+			break
+	check(cp_field != null, "Checkpoint emits an 80 px sound field")
+	if cp_field != null:
+		check(cp_field.safe_for_player and not cp_field.lethal, "Checkpoint field is safe and non-lethal")
+		check(cp_field.level == 0 and cp_field.color == Color.WHITE, "Checkpoint field is lv0 white")
+		check(cp_field.emitter == null, "Checkpoint field has no emitter (doors ignore it)")
+	for child in level.sound_fields.get_children():
+		if child is SoundField and child.emitter == null:
+			child.queue_free()
+	await frames(30)
+	var reemitted := false
+	for child in level.sound_fields.get_children():
+		if child is SoundField and child.emitter == null and absf(child.side_length - 80.0) < 0.01:
+			reemitted = true
+			break
+	check(reemitted, "Checkpoint re-emits within 0.2 s")
 
 	# 3. 声场视觉：在 expand_duration 内从中心扩到目标边长（判定仍是满尺寸，不随视觉变化）。
 	var field := SoundField.new()
@@ -94,14 +132,23 @@ func _run() -> void:
 	level.reset_to_checkpoint()
 	var respawn_position: Vector2 = level.player.global_position
 	await frames(2)
-	check(not level.breakables.has_cell(1, c1), "Reset leaves the first room's glass broken")
-	check(level.breakables.has_cell(1, c2), "Reset restores the second room's glass")
+	check(not level.breakables.has_cell(1, c1), "Reset leaves the start room's glass broken")
+	check(level.breakables.has_cell(1, c2), "Reset restores the other room's glass")
 	check(respawn_position.distance_to(level.get_checkpoint_anchor()) < 0.1,
 		"Reset respawns at the checkpoint")
 	check(camera.global_position.distance_to(room2.get_rect().get_center()) < 2.0,
 		"Reset snaps camera to the checkpoint room")
 
 	# 5. 噪音内站桩死亡后回到存档点。
+	# 存档点声场会把存档点变成永久安全区；本测试需要关闭。
+	for node in _walk(level.get_node("Objects")):
+		if node is Checkpoint:
+			node.fields_enabled = false
+	for child in level.sound_fields.get_children():
+		if child is SoundField and child.emitter == null:
+			child.queue_free()
+	await frames(2)
+
 	level.breakables.break_in_rect(Rect2(p2 - Vector2(8, 8), Vector2(16, 16)), 1)
 	var noise_layer: TileMapLayer = level.noise
 	var base: Vector2i = noise_layer.local_to_map(noise_layer.to_local(target2))
@@ -113,6 +160,11 @@ func _run() -> void:
 	var deaths_before: int = level.deaths
 	level.player.reset_to(target2)
 	await frames(25)
+	check(level.deaths == deaths_before, "Noise does not kill during the 0.5 s cooldown")
+	for _i in range(150):
+		await physics_frame
+		if level.deaths > deaths_before:
+			break
 	check(level.deaths > deaths_before, "Standing in noise without a sound field kills the player")
 	check(level.player.global_position.distance_to(level.get_checkpoint_anchor()) < 40.0,
 		"Death respawns at the checkpoint")
@@ -149,3 +201,9 @@ func _fit_zoom(room: Room, viewport_size: Vector2) -> float:
 		return 1.0
 	var fit := minf(viewport_size.x / size.x, viewport_size.y / size.y)
 	return clampf(fit * 0.92, 1.0, 8.0)
+
+func _other_room(rooms: Array[Room], start: Room) -> Room:
+	for room in rooms:
+		if room != start:
+			return room
+	return start

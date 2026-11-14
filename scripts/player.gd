@@ -15,11 +15,14 @@ const CONTACT_TOLERANCE_PIXELS: float = 0.5
 @export var jump_buffer: float = 0.12
 @export var walk_wave_interval_tiles: float = 2.0
 ## 走路 / lv0 落地声场边长（格）；当前 3 格 = 48 像素。
-@export var walk_wave_side_cells: float = 2.0
+@export var walk_wave_side_cells: float = 3.0
 ## lv1 落地声场边长（格）；2 < 落差 ≤ 6 格，当前 5 格 = 80 像素。
-@export var landing_lv1_side_cells: float = 5.0
+@export var landing_lv1_side_cells: float = 6.0
 ## lv2 落地声场边长（格）；落差 > 6 格，当前 7 格 = 112 像素。
-@export var landing_lv2_side_cells: float = 9.0
+@export var landing_lv2_side_cells: float = 10.0
+## 到达跳跃最高点后额外滞空的时间（秒）。
+@export var apex_hover_time := 0.0
+
 
 var controls_enabled: bool = false:
 	set(value):
@@ -33,6 +36,9 @@ var _jump_remaining: float = 0.0
 var _fall_apex_y: float = 0.0
 var _walk_wave_distance: float = 0.0
 var _was_moving_grounded: bool = false
+var _jumping := false
+var _hover_used := false
+var _hover_remaining := 0.0
 
 func _ready() -> void:
 	_fall_apex_y = global_position.y
@@ -41,6 +47,10 @@ func _physics_process(delta: float) -> void:
 	if not controls_enabled:
 		return
 	var was_grounded := is_on_floor()
+	if was_grounded:
+		_jumping = false
+		_hover_used = false
+		_hover_remaining = 0.0
 	_jump_remaining = maxf(0.0, _jump_remaining - delta)
 	_coyote_remaining = coyote_time if was_grounded else maxf(0.0, _coyote_remaining - delta)
 	if was_grounded and velocity.y >= 0.0:
@@ -58,8 +68,19 @@ func _physics_process(delta: float) -> void:
 		velocity.y = -launch
 		_jump_remaining = 0.0
 		_coyote_remaining = 0.0
+		_jumping = true
+		_hover_used = false
+		_hover_remaining = 0.0
 		# 起跳也发出一次 lv0 声场（与走路同尺寸）。
 		wave_emitted.emit(global_position, walk_wave_side_cells * TILE_SIZE, 0, "jump")
+
+	# 到达跳跃最高点时悬停 `apex_hover_time` 秒，再恢复原来的下落速度。
+	if _jumping and not _hover_used and velocity.y >= 0.0:
+		_hover_used = true
+		_hover_remaining = apex_hover_time
+	if _hover_remaining > 0.0:
+		_hover_remaining = maxf(0.0, _hover_remaining - delta)
+		velocity.y = 0.0
 
 	var pre_x := global_position.x
 	move_and_slide()
@@ -109,6 +130,9 @@ func reset_to(point: Vector2) -> void:
 	_jump_remaining = 0.0
 	_walk_wave_distance = 0.0
 	_was_moving_grounded = false
+	_jumping = false
+	_hover_used = false
+	_hover_remaining = 0.0
 	_fall_apex_y = point.y
 
 func _launch_speed(height_pixels: float, g: float) -> float:

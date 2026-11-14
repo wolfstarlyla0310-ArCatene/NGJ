@@ -1,5 +1,75 @@
 # 验证记录
 
+2026-11-14（移植 CCCAT 按钮 + 谜题门）
+
+- 新增 `DoorButton`（`scripts/world/button.gd`，Area2D）与 `button_once.tscn` / `button_rebound.tscn`：触发改为 **lv1 及以上声场**与按钮 16×16 区域相交；删除 CCCAT 的朝向/踩踏逻辑，贴图 `assets/tiles/buttom.png` 2×2 帧（左灭 / 右亮，上行一次性 / 下行回弹）。
+- 新增 `PuzzleDoorManager`（`scripts/world/puzzle_door_manager.gd`）：四邻分组 `DoorTiles` 门格、开局快照擦除/回填、`door_cells` 接线、全部相连按钮满足才开门、≥2 个回弹按钮同时满足时整组锁死、按房间 `reset_room`；不依赖 BoardManager / 朝向。
+- 复制 CCCAT `door_tileset.png` → `assets/tiles/cccat_door_tileset.png`，新建 `resources/door_tileset.tres`（47 格门图集 + 整格物理层 + terrain 3「门」）。
+- `big_map.tscn` 新增 `DoorTiles` / `Buttons` / `DoorManager`；`world_map.gd` 在 `_ready` 调 `setup(get_rooms())`、在 `reset_to_checkpoint` 调 `reset_room(room)`；房间编辑器校验新增 DoorTiles / DoorManager 检查。
+- 新增 `tests/button_door_checks.gd` **38 项**（门图集与按钮四帧、门格分组、lv0/lv1/lv2、回弹、一次性、组锁、擦格/回填、按房间重置）。七套 headless（本机 Godot 4.5.1）：38 + 67 + 29 + 19 + 7 + 8 + 17；仅 `door_animal_checks` 既有「Animal has no visible texture」失败 1 项。
+
+2026-11-14（声场生成对准 16px 网格）
+
+- `SoundField` 新增 `TILE_SIZE` 与静态 `snap_origin_to_grid(origin, side)`：把声场左上角取整到最近的 16px 格线（中心最多偏移 8px），保证声场边线与格子边界对齐。
+- `world_map` / `wave_jump_lab` 的 `_on_wave`、`checkpoint._spawn_field`、`animal._spawn_wave`、`trigger_field._emit_field` 改用吸附后的原点；世界/测试关的玻璃破碎矩形与 lv2 刺摧毁也使用同一个吸附原点，视觉与判定一致。噪音隐藏仍使用单个声场 `encloses`，因为声场已整格对齐。
+- 手动创建的 `SoundField`（测试/调试）、刺脉冲、死亡场、门脉冲不吸附。
+- 测试：`keyboard_movement_checks` 64 → **67**（新增 helper 左上角对齐、生成声场边线对齐断言）。六套 headless（本机 Godot 4.5.1）：67 + 29 + 19 + 7 + 8 + 17；仅 `door_animal_checks` 既有「Animal has no visible texture」失败 1 项。
+
+2026-11-14（噪音冷却 / 完全覆盖隐藏 / 存档点声场 / lv2 常驻）
+
+- 噪音死亡：`world_map.gd` / `wave_jump_lab.gd` 的 `GRACE_SECONDS` 0.1 → **0.5 秒**；接触判定从玩家中心改为**整个碰撞体**（新增 `NoiseField.touches_rect()`，隐藏格仍然致命）；安全判定仍是中心点在 `safe_for_player` 声场内。
+- 噪音隐藏：`NoiseField.sync_visibility()` 从“任意重叠”改为**单个声场 `Rect2.encloses(16×16 格)` 完全覆盖**；同时修正原先误用的 32×32 膨胀格矩形。
+- 存档点：每 **0.2 秒**发一个 **5 格 / 80px** 白色 lv0 安全声场（`emitter = null`，门忽略；存档点附近屏障会被持续激活）；新增导出 `fields_enabled` / `field_side_cells` / `field_interval` / `field_lifetime`。
+- lv2：玩家 `level == 2` 落地声场 `lifetime = INF`（非 persistent），常驻到 R / 死亡重置；`sound_field.gd` 注释补充 INF 语义。
+- 测试：`keyboard_movement_checks` 51 → **64**（0.5s 冷却、身体边缘接触、完全覆盖/部分重叠、`touches_rect`、lv2 常驻/重置）；`big_map_checks` 24 → **29**（存档点 80px 声场与重发、噪音冷却）；`spike_checks` 17 → **19**（过滤存档点声场、lv2 常驻）；`trigger_checks` 仍 7（只统计 48px 声场）。六套 headless（本机 Godot 4.5.1）：64 + 29 + 19 + 7 + 8 + 17；仅 `door_animal_checks` 因工作区既有 `animal.tscn` 移除 `visible = false` 失败 1 项「Animal has no visible texture」，其余全部通过。
+
+2026-11-14（动物声场边长可在检查器调）
+
+- `animal.gd`：移动声场的 `wave_side`（像素）改为 **`move_wave_side_cells`（格）**，默认 1.0 格 = 16px；`idle_wave_side_cells` 默认 1.4 格 = 22.4px。两者都加 `@export_range(0.25, 16.0, 0.25)`，连同 `wave_interval_pixels` / `wave_lifetime` / `wave_expand_duration` / `idle_wave_interval` 归入检查器 **「声场」** 分组；默认表现不变。
+- `door_animal_checks.gd` 的移动声场断言改为读取 `move_wave_side_cells * 16.0`。
+- 测试（本机 Godot 4.5.1 headless）：`keyboard_movement_checks` / `big_map_checks` / `spike_checks` / `trigger_checks` / `barrier_checks` 全部通过；`door_animal_checks` 的移动/静止声场断言通过。工作区既有未提交改动（`animal.tscn` 移除 `visible = false`）导致「Animal has no visible texture」1 项失败，与本次修改无关。
+
+2026-11-14（玩家声场颜色：lv1 蓝、lv2 黄）
+
+- `SoundField` 新增 `color_for_level()`：lv0 白色、lv1 蓝色 `(0.3, 0.65, 1)`、lv2 黄色 `(1.0, 0.9, 0.2)`；世界与测试关的 `_on_wave` 按等级写入 `field.color`。
+- lv0（走路/起跳/小落差）保持白色；门的「红色脉冲吃白色声场主人」规则因此只对 lv0/触发等白色声场生效，lv1/lv2 蓝/黄不触发。
+- 测试：`keyboard_movement_checks.gd` 51 项（新增 3 项颜色断言）。六套 headless 51 + 23 + 17 + 7 + 8 + 17 全部通过。
+
+2026-11-14（跳跃最高点悬停 1 秒）
+
+- `player.gd`：移除 `air_time_extra` 的低重力方案，恢复原重力（起跳/下落速度变快）；新增 `apex_hover_time = 1.0`：跳跃到达最高点（竖直速度转为 >= 0）时清零竖直速度并悬停 1 秒，之后恢复原下落速度。
+- 跳跃高度仍由 `jump_height_tiles` 决定（当前 4 格 = 64px）；空中水平控制保持；落地/`reset_to` 会清空悬停状态。
+- 测试：键盘 48 项及六套 headless 48 + 23 + 17 + 7 + 8 + 17 全部通过。
+
+2026-11-14（刺声场范围改为三格）
+
+- `SpikeField.field_side_cells` 1.4 → **3.0**：红色脉冲视觉边长 48px；击杀判定仍只看刺格本身（16×16），脉冲不参与击杀。
+- `spike_checks.gd` 按导出值断言，17 项全部通过。
+
+2026-11-14（玩家滞空 +1s；屏障存在时间 +1s）
+
+- `player.gd` 新增 `air_time_extra = 1.0`：`_ready` 根据当前跳跃高度反算更低的重力，使滞空时间在保持跳跃高度的前提下增加 1 秒（当前 4 格跳跃约 0.58s → 1.58s）。
+- `barrier_field.gd` 的 `hide_delay` 0.2 → **1.2 秒**：动物在屏障上方持续发 1 格移动 / 1.4 格静止声场时，动物声场（1.0s）+ 屏障延迟（1.2s）足以覆盖动物的静止间隔（1.0s），屏障不会消失，动物不会掉落。
+- `animal.tscn` 恢复 `visible = false` 并移除过期的属性覆盖，使用脚本当前默认（声场 1.0s / 扩散 0.5s / 静止间隔 1.0s / 1.4 格）。
+- 测试：键盘跳跃/噪音等待、屏障延迟等待适配新时长；六套 headless 48 + 23 + 17 + 7 + 8 + 17 全部通过。
+
+2026-11-14（可设置起始房间）
+
+- `WorldMap` 新增 `@export var start_room: Room`：设置后开局把玩家放到该房间的 Checkpoint（没有则房间中心），并绑定初始存档点；留空则沿用玩家在场景中的初始房间。
+- 房间编辑器「校验地图」新增：Start Room 必须是 `Rooms` 下的房间；该房间没有 Checkpoint 时提示会从房间中心出生。
+- 测试适配：`big_map_checks.gd` 显式把 Start Room 设为与玩家位置不同的房间并验证出生点/相机/存档点；`door_animal_checks.gd` 自动选一个非存档点房间放门外陷阱。六套 headless 48 + 23 + 17 + 7 + 8 + 17 全部通过。
+
+2026-11-14（屏障未激活 20% 透明）
+
+- `BarrierField` 新增 20% 透明背景层 `Ghost`（同图集、无碰撞、`modulate.a = 0.2`，位于主屏障层下方）：未激活/延迟结束后的屏障以 20% 透明度显示；被声场覆盖时主层完整显形并获得碰撞，0.2 秒后回到 20%。
+- 测试：`barrier_checks.gd` 8 项（新增未激活 20% 背景层检查）。六套 headless 48 + 21 + 17 + 7 + 8 + 17 全部通过。
+
+2026-11-14（刺脉冲仅视觉；击杀改用刺格本体）
+
+- `SpikeField` 的 `field_side_length` 改为 `field_side_cells = 1.4`（视觉边长 22.4px）；生成的红色脉冲 `lethal = false`、`safe_for_player = false`。
+- 新增 `SpikeField.touches_rect(area)`：用现存刺格本身的 16×16 区域判定；`WorldMap._physics_process` 使用玩家碰撞体矩形（含 CollisionShape2D 偏移）接触刺格即死亡，脉冲不再参与击杀。
+- 测试：`spike_checks.gd` 17 项（脉冲 22.4px、非致命，接触刺格死亡）。六套 headless 48 + 21 + 17 + 7 + 7 + 17 全部通过。
+
 2026-11-14（声场像素化）
 
 - `SoundField._draw()` 与 `DoorField._draw()` 改为共用的 `_draw_pixel_square()`：边框 2 像素、关闭抗锯齿、四边吸附到整数世界坐标，扩散时按整像素步进，消除模糊。

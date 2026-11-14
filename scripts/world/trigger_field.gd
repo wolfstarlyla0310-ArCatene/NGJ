@@ -35,4 +35,4 @@ func _emit_field(world_position: Vector2) -> void:
 	field.lethal = false
 	field.safe_for_player = true
 	sound_fields.add_child(field)
-	field.global_position = world_position
+	field.global_position = SoundField.snap_origin_to_grid(world_position, field_side_length)
