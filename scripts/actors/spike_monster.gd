@@ -6,7 +6,7 @@ extends Area2D
 
 const TILE_SIZE := 16.0
 
-@export var move_speed := 55.0
+@export var move_speed := 30.0
 @export var push_speed := 220.0
 @export var push_duration := 0.25
 
