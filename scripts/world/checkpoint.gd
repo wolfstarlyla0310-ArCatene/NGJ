@@ -34,6 +34,7 @@ var _current_field: SoundField = null
 var _field_fade_elapsed := 0.0
 
 @onready var _sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
+@onready var checkpoint_audio: AudioStreamPlayer = get_node_or_null("CheckpointSound") as AudioStreamPlayer
 
 func _ready() -> void:
 	collision_layer = 0
@@ -112,12 +113,18 @@ func _on_body_entered(body: Node2D) -> void:
 func set_active(value: bool) -> void:
 	if value == _active:
 		return
+
+	var first_activation := value and not _field_activated
+
 	_active = value
 	_refresh_visual()
+
 	if value:
-		# 玩家激活：发出一次安全场，之后一直保持（换绑/离开房间都不删除）。
 		_field_activated = true
 		_ensure_field()
+
+		if first_activation and checkpoint_audio != null and checkpoint_audio.stream != null:
+			checkpoint_audio.play()
 
 func is_active() -> bool:
 	return _active
