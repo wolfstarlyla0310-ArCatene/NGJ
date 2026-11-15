@@ -68,6 +68,10 @@ func _run() -> void:
 		"Player prefab includes both movement and death sound resources")
 	check(player.move_audio.bus == &"Move" and player.die_audio.bus == &"Die",
 		"Player sounds route to Move/Die buses")
+	var small_jump := player.get_node_or_null("BlueDropSound") as AudioStreamPlayer
+	check(small_jump != null and small_jump.stream != null \
+		and small_jump.stream.resource_path == "res://assets/sound/player_jump.wav",
+		"Small jump and small ceiling bump use player_jump.wav")
 	var manager := root.get_node_or_null("AudioManager")
 	check(manager != null, "AudioManager autoload is present")
 	var move_bus := AudioServer.get_bus_index("Move")

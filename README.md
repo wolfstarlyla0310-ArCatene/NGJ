@@ -26,6 +26,8 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 
 声场在发出后的 **`expand_duration`（当前 0.2 秒）内从中心快速扩散到目标边长**，之后保持满框：**lv0/lv1 存在 0.5 秒**并淡出，**lv2 存在 2 秒**；不会推动任何物体。视觉为 **2 像素宽、关闭抗锯齿并按像素对齐**的硬边方框。扩散只影响视觉表现，玻璃破碎/噪音隐藏/安全判定仍按目标尺寸在发出瞬间生效。
 
+**同色重叠合并**：颜色相同（按 RGB）的声场重叠时，只保留并集外轮廓，落在另一个同类声场内部的像素边不再绘制；完全被包住的场不画边界。白色、蓝色、黄色、红色各自成组，**不同颜色重叠时边界互不去除**。遮挡按当前视觉尺寸（`current_side`）计算，仅影响绘制，不改变任何判定。
+
 玩家、存档点、动物、触发生成的声场会**吸附到 16px 网格**：左上角取整到最近的格线（中心最多偏移 8px），使声场边线与地形/玻璃/噪音格边界对齐。
 
 玩家跳跃上升、头撞到天花板（tile）时会发声场：**起跳瞬间头顶没有任何净空（约 ≤2px）→ lv2 黄色波，持续 2 秒**；有净空 → 与小跳落地的 lv1 蓝波一致（同样能震碎 lv1 玻璃、触发解谜按钮、驱动动物）。每次向上碰撞只发一次；撞墙与落地不会误触发。
@@ -142,6 +144,7 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 - 所有音量集中在 **`resources/audio_settings.tres`**（`AudioSettings` 资源）：`Move Db`（默认 **-12 dB**，走路声音已调轻）、`Die Db`、`Animal Db`。在检查器改数值后运行即可生效。
 - 音源只负责挂 Stream 并选择总线（`Player/MoveSound`、`Player/DieSound`、`Animal/AnimalSound`），不再在各处单独写死音量。
 - 例外：`Animal/AnimalSound.volume_db` 由动物按**玩家曼哈顿距离**每帧设置（0 格 0 dB → 8 格静音），最终音量 = 距离衰减 × `Animal` 总线音量。
+- 玩家**小跳落地（lv1）与小顶头（lv1）**音效使用 `assets/sound/player_jump.wav`（与走路同一个文件）；大跳/大顶头仍用 `YellowDrop`。
 - 新增音效时：在 `default_bus_layout.tres` 加总线，并在 `AudioManager.CATEGORY_BUSES` / `AudioSettings` 增加类别。
 
 ## 正式大地图与房间
@@ -183,7 +186,7 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | `scenes/levels/wave_jump_lab.tscn` | 机制测试关 |
 | `scripts/wave_jump_lab.gd` | 测试关的 R、声场生成、噪音生存、鼠标传送 |
 | `scripts/player.gd` | 移动、跳跃、分级声场、`Terminal Fall Speed` 可调最大下落速度、危险倒计时贴图渐红（本体由 `player.tscn` 的 Sprite2D 显示） |
-| `scripts/sound_field.gd` | 声场视觉效果（中心扩散 + 淡出；lv2 使用 `LV2_LIFETIME = 2 秒`；生成时吸附 16px 网格） |
+| `scripts/sound_field.gd` | 声场视觉效果（中心扩散 + 淡出；lv2 使用 `LV2_LIFETIME = 2 秒`；生成时吸附 16px 网格；同色重叠合并外轮廓） |
 | `scripts/world/spike_field.gd`、`scripts/actors/spike_monster.gd` | 刺格 → 刺怪生成器（四邻分组）与追击/推/定住/吃人行为 |
 | `scripts/world/trigger_field.gd` | 触发方块层：玩家站上去每 0.5 秒发一次白色 3 格声场 |
 | `scripts/world/barrier_field.gd` | 声场屏障层：未激活 20% 透明；被任意声场覆盖时完整显形挡人，1.2 秒后回到 20% |
@@ -220,13 +223,15 @@ godot --headless --path . --script res://tests/door_animal_checks.gd
 godot --headless --path . --script res://tests/button_door_checks.gd
 godot --headless --path . --script res://tests/collectible_checks.gd
 godot --headless --path . --script res://tests/checkpoint_wave_checks.gd
+godot --headless --path . --script res://tests/sound_field_border_checks.gd
 ```
 
 - `keyboard_movement_checks.gd`：81 项，覆盖跳跃/起跳悬停、顶天花板 lv1/lv2（零净空）声场、贴墙发声场、声场等级/边长/颜色、声场 16px 网格吸附、lv2 2 秒寿命、最大下落速度限制、走路/撞墙、玻璃破碎与恢复、可调噪音冷却/身体接触/中心覆盖隐藏、调试传送。
+- `sound_field_border_checks.gd`：14 项，覆盖同色重叠合并为并集外轮廓、完全包含、异色不合并、同色贴边保留公共边、逻辑判定不变、不同父节点/不可见场不参与遮挡。
 - `big_map_checks.gd`：73 项，覆盖玩家可见贴图、Start Room 起始房间、房间、相机严格满屏、声场扩散、存档点接触激活后的持续 80px 声场（含渐隐渐显视觉）/旗子贴图、进房不自动绑定/接触才绑定存档点、死亡需按 R 且隐藏贴图、危险倒计时渐红、房间裁剪（仅当前房间 / Room3+Room4+Room5、Room6+Room8 联动）、跨房间刷新与联动组一起刷新、动物归位与被驱赶换房后的刷新点、Room3 动物刷新点改记 Room4 存档点旁。
 - `checkpoint_wave_checks.gd`：23 项，覆盖未激活无场、玩家接触后才发出一次持续场、唯一性/参数、3 秒不替换、不同相位死亡重开同步安全、`fields_enabled` 清场与重建、离开房间后场保持。
 - `spike_checks.gd`：22 项，覆盖刺层隐藏、四邻分组生成怪、三连红波视觉（默认 2 秒间隔）/判定仍按 tile、无重力、追动物/移动玩家、近者优先、不跨房间、玩家 lv1 推开、lv2 定住、非玩家声场不推怪、R 归位、接触吃玩家/动物、被吃动物 R 复活。
-- `audio_node_checks.gd`：24 项，覆盖动物/玩家音效节点、总线归属（Move/Die/Animal）、`AudioManager` 自动加载与 `AudioSettings` 音量应用、动物叫声按玩家曼哈顿距离衰减且 8 格静音；需要渲染窗口（不要加 `--headless`）。
+- `audio_node_checks.gd`：25 项，覆盖动物/玩家音效节点、总线归属（Move/Die/Animal）、`AudioManager` 自动加载与 `AudioSettings` 音量应用、动物叫声按玩家曼哈顿距离衰减且 8 格静音、小跳/小顶头使用 `player_jump.wav`；需要渲染窗口（不要加 `--headless`）。
 - `trigger_checks.gd`：7 项，覆盖触发格存在、站上去重复发白色 48px 声场、安全区、不碎玻璃、冷却。
 - `barrier_checks.gd`：8 项，覆盖屏障未激活 20% 透明、任意声场完整显形、物理层、阻挡玩家、声场结束 1.2 秒后回到 20%。
 - `door_animal_checks.gd`：26 项，覆盖门脉冲、红脉冲吃白声场主人、门随房间恢复、动物重力/贴图/蓝色 lv1 静止声场（停止后立即发）/lv1 驱赶/移动声场与时长扩散、lv2 震飞、平台边缘停住、一格深沟走过、爬一格台阶、归位、门吃动物。

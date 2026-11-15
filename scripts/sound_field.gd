@@ -74,10 +74,88 @@ func _draw() -> void:
 	var draw_color := Color(color.r, color.g, color.b, color.a * alpha)
 	_draw_pixel_square(draw_color)
 
-## 硬边、按像素对齐的方框：关闭抗锯齿，并把四边吸附到整数世界坐标。
+## 硬边、按像素对齐的方框；同色重叠处只保留并集外轮廓。
 func _draw_pixel_square(draw_color: Color) -> void:
+	for piece in visible_border_rects():
+		draw_rect(Rect2(piece.position - global_position, piece.size), draw_color, true)
+
+## 当前实际绘制的方形区域（世界坐标、按像素取整），用于同类重叠判定。
+func drawn_world_rect() -> Rect2:
 	var half := maxf(1.0, roundf(current_side * 0.5))
-	var pixel_offset := global_position.round() - global_position
-	draw_rect(
-		Rect2(pixel_offset.x - half, pixel_offset.y - half, half * 2.0, half * 2.0),
-		draw_color, false, line_width, false)
+	var center := global_position.round()
+	return Rect2(center - Vector2(half, half), Vector2(half * 2.0, half * 2.0))
+
+## 同类判定：只看 RGB，忽略 alpha；白 / 蓝 / 黄 / 红各自成组。
+func _is_same_family(other: SoundField) -> bool:
+	return is_equal_approx(color.r, other.color.r) \
+		and is_equal_approx(color.g, other.color.g) \
+		and is_equal_approx(color.b, other.color.b)
+
+## 同一父节点下、可见的同类兄弟声场矩形（收集品脉冲是子节点，不会参与）。
+func _occluders() -> Array[Rect2]:
+	var rects: Array[Rect2] = []
+	var parent := get_parent()
+	if parent == null:
+		return rects
+	for child in parent.get_children():
+		if child == self or not child is SoundField:
+			continue
+		var other := child as SoundField
+		if other.is_queued_for_deletion() or not other.visible or not _is_same_family(other):
+			continue
+		rects.append(other.drawn_world_rect())
+	return rects
+
+## 当前可见的边界分段（世界坐标、厚度 line_width）；同类重叠处的内部边段已去掉。
+func visible_border_rects() -> Array[Rect2]:
+	var rect := drawn_world_rect()
+	var w := maxf(1.0, line_width)
+	var out: Array[Rect2] = []
+	for span in _visible_spans(rect.position.x, rect.end.x, rect.position.y, true):
+		out.append(Rect2(span.x, rect.position.y - w * 0.5, span.y - span.x, w))
+	for span in _visible_spans(rect.position.x, rect.end.x, rect.end.y, true):
+		out.append(Rect2(span.x, rect.end.y - w * 0.5, span.y - span.x, w))
+	for span in _visible_spans(rect.position.y, rect.end.y, rect.position.x, false):
+		out.append(Rect2(rect.position.x - w * 0.5, span.x, w, span.y - span.x))
+	for span in _visible_spans(rect.position.y, rect.end.y, rect.end.x, false):
+		out.append(Rect2(rect.end.x - w * 0.5, span.x, w, span.y - span.x))
+	return out
+
+## 沿一条边计算未被同类矩形遮住的区间；fixed 是边线另一轴的坐标。
+## 只有边线严格落在对方内部才遮挡：共享边/贴边不算重叠，公共边保留。
+func _visible_spans(edge_start: float, edge_end: float, fixed: float, horizontal: bool) -> Array[Vector2]:
+	var cuts: Array[Vector2] = []
+	for r in _occluders():
+		var a := 0.0
+		var b := 0.0
+		if horizontal:
+			if fixed <= r.position.y or fixed >= r.end.y:
+				continue
+			a = maxf(edge_start, r.position.x)
+			b = minf(edge_end, r.end.x)
+		else:
+			if fixed <= r.position.x or fixed >= r.end.x:
+				continue
+			a = maxf(edge_start, r.position.y)
+			b = minf(edge_end, r.end.y)
+		if b > a:
+			cuts.append(Vector2(a, b))
+	cuts.sort_custom(_sort_spans)
+	var spans: Array[Vector2] = []
+	var cursor := edge_start
+	for cut in cuts:
+		if cut.x > cursor:
+			spans.append(Vector2(roundf(cursor), roundf(cut.x)))
+		cursor = maxf(cursor, cut.y)
+		if cursor >= edge_end:
+			break
+	if cursor < edge_end:
+		spans.append(Vector2(roundf(cursor), roundf(edge_end)))
+	var cleaned: Array[Vector2] = []
+	for span in spans:
+		if span.y > span.x:
+			cleaned.append(span)
+	return cleaned
+
+func _sort_spans(a: Vector2, b: Vector2) -> bool:
+	return a.x < b.x

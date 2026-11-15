@@ -1,5 +1,21 @@
 # 验证记录
 
+2026-11-15（玩家小跳/小顶头音效）
+
+- `scenes/actors/player.tscn`：`BlueDropSound`（lv1 落地「小跳」与 lv1 顶头「小顶头」共用的音源）的 stream 改为 `res://assets/sound/player_jump.wav`（与 `MoveSound` 同一文件）；删除不再使用的蓝落地 mp3 ext_resource。大跳/大顶头仍走 `YellowDropSound`。
+- 测试：`audio_node_checks` 24 → **25**（新增「小跳/小顶头使用 player_jump.wav」断言），窗口运行 **25 全过**；`big_map_checks` 回归全过。
+
+2026-11-15（同色重叠声场合并边界）
+
+- `sound_field.gd`：新增 `drawn_world_rect()`（按 `current_side` 像素取整的可视矩形）、`_is_same_family()`（只比较 RGB）、`_occluders()`（同一父节点下可见的同类兄弟场）、`visible_border_rects()` 与 `_visible_spans()`。`_draw_pixel_square()` 改为按可见分段绘制：
+  - 同色重叠：去掉落在另一同类声场内部的像素边，只保留并集外轮廓；完全被包住的场不画边界。
+  - 异色重叠：白 / 蓝 / 黄 / 红各自成组，互不去除。
+  - 边线严格落在对方内部才去除；仅相接（共享边）的同类场不丢公共边。
+  - 只看同一父节点下的兄弟场；收集品脉冲是收集品的子节点，不参与遮挡。
+- 仅改绘制：`get_rect()` / `contains_point()` / `side_length` 等判定路径完全不变。`DoorField` 复用 `_draw_pixel_square()`，自动获得同样行为。
+- 测试：新增 `tests/sound_field_border_checks.gd` **14 项全过**（不重叠 4 边、同色部分重叠去内部边、完全包含、异色不合并、贴合共享边、逻辑不变、不同父节点/不可见场不遮挡）。
+- 回归：`keyboard_movement_checks` / `big_map_checks` / `checkpoint_wave_checks` / `trigger_checks` / `barrier_checks` / `collectible_checks` / `door_animal_checks` / `button_door_checks` / `spike_checks` 全部通过。
+
 2026-11-15（动物音效距离衰减 / 存档点激活后发出持续场）
 
 - `player.gd`：`_ready()` 加入 `player` 组，供动物查找主控玩家。

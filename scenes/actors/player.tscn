@@ -2,9 +2,8 @@
 
 [ext_resource type="Script" uid="uid://piipypeag2ln" path="res://scripts/player.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://dgdhco5jh8xlj" path="res://assets/player/player.png" id="2_ru62r"]
-[ext_resource type="AudioStream" path="res://assets/sound/player_move.wav" id="3_move_sound"]
-[ext_resource type="AudioStream" path="res://assets/sound/player_die.wav" id="4_die_sound"]
-[ext_resource type="AudioStream" uid="uid://8uejbs88y135" path="res://assets/sound/BlueDrop/freesound_community-clothes-drop-2-40202.mp3" id="5_blue_drop"]
+[ext_resource type="AudioStream" uid="uid://cidlemwksjpkj" path="res://assets/sound/player_jump.wav" id="3_move_sound"]
+[ext_resource type="AudioStream" uid="uid://xsaiiw2c5p6k" path="res://assets/sound/player_die.wav" id="4_die_sound"]
 [ext_resource type="AudioStream" uid="uid://b3tjv07cc7pn0" path="res://assets/sound/YellowDrop/freesound_community-low-flr-93430.mp3" id="6_yellow_drop"]
 [ext_resource type="AudioStream" uid="uid://kb3k80fapx5d" path="res://assets/sound/PickUP/pickup.mp3" id="7_pickup"]
 
@@ -28,19 +27,19 @@ texture = ExtResource("2_ru62r")
 position = Vector2(0, 4)
 shape = SubResource("RectangleShape2D_player")
 
-[node name="MoveSound" type="AudioStreamPlayer" parent="."]
+[node name="MoveSound" type="AudioStreamPlayer" parent="." unique_id=2932949]
 stream = ExtResource("3_move_sound")
 bus = &"Move"
 
-[node name="DieSound" type="AudioStreamPlayer" parent="."]
+[node name="DieSound" type="AudioStreamPlayer" parent="." unique_id=1250263871]
 stream = ExtResource("4_die_sound")
 bus = &"Die"
 
-[node name="BlueDropSound" type="AudioStreamPlayer" parent="."]
-stream = ExtResource("5_blue_drop")
+[node name="BlueDropSound" type="AudioStreamPlayer" parent="." unique_id=515729678]
+stream = ExtResource("3_move_sound")
 
-[node name="YellowDropSound" type="AudioStreamPlayer" parent="."]
+[node name="YellowDropSound" type="AudioStreamPlayer" parent="." unique_id=973183700]
 stream = ExtResource("6_yellow_drop")
 
-[node name="PickUpSound" type="AudioStreamPlayer" parent="."]
+[node name="PickUpSound" type="AudioStreamPlayer" parent="." unique_id=430408394]
 stream = ExtResource("7_pickup")
