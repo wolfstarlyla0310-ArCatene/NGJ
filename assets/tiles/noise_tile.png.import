@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dscqxjclnd57k"
-path="res://.godot/imported/space_W.png-961acb332587a70aaf466d6a6c2fb6c0.ctex"
+uid="uid://dg0hyhj4pq3m5"
+path="res://.godot/imported/noise_tile.png-e213967f2e4dd9eefdc37a64307ad277.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tips/space_W.png"
-dest_files=["res://.godot/imported/space_W.png-961acb332587a70aaf466d6a6c2fb6c0.ctex"]
+source_file="res://assets/tiles/noise_tile.png"
+dest_files=["res://.godot/imported/noise_tile.png-e213967f2e4dd9eefdc37a64307ad277.ctex"]
 
 [params]
 

@@ -16,7 +16,7 @@ enum ClimbPhase { NONE, TURN_UP, RISE, TURN_FORWARD, MOVE_ONTO }
 ## 动物叫声之间的间隔，单位：秒
 @export var animal_sound_interval: float = 1.0
 
-@export var _animal_sound_elapsed: float = 0.0
+var _animal_sound_elapsed: float = 0.0
 @export var move_speed := 90.0
 @export var gravity := 1500.0
 @export var detection_margin := 16.0
@@ -64,11 +64,16 @@ var _alive := true
 var _seen_lv1: Dictionary[int, WeakRef] = {}
 
 @onready var _sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
+@onready var _animal_audio: AudioStreamPlayer = get_node_or_null("AnimalSound") as AudioStreamPlayer
+@onready var _screen_notifier: VisibleOnScreenNotifier2D = get_node_or_null("VisibleOnScreenNotifier2D") as VisibleOnScreenNotifier2D
 
 func _ready() -> void:
 	queue_redraw()
 	if Engine.is_editor_hint():
 		return
+	if _screen_notifier != null:
+		_screen_notifier.screen_entered.connect(_on_visible_on_screen_notifier_2d_screen_entered)
+		_screen_notifier.screen_exited.connect(_on_visible_on_screen_notifier_2d_screen_exited)
 	_sound_fields = get_tree().get_first_node_in_group("sound_fields")
 	add_to_group("animal")
 	# 等调用方设好位置后再记录出生点。
@@ -309,6 +314,7 @@ func consume() -> void:
 	if not _alive:
 		return
 	_alive = false
+	_stop_animal_sound()
 	velocity = Vector2.ZERO
 	_clear_climb()
 	_walk_remaining = 0.0
@@ -322,6 +328,7 @@ func rebase_home() -> void:
 
 ## R / 死亡重置时回到出生位置并清空所有临时状态。
 func reset_home() -> void:
+	_stop_animal_sound()
 	if not _home_captured:
 		_capture_home()
 	global_position = _home_position
@@ -360,11 +367,37 @@ func _draw() -> void:
 	draw_rect(Rect2(-4, -3, 2, 2), Color.BLACK)
 	draw_rect(Rect2(2, -3, 2, 2), Color.BLACK)
 
+
+func _on_visible_on_screen_notifier_2d_screen_entered() -> void:
+	if Engine.is_editor_hint() or not _alive or _animal_audio == null:
+		return
+	_animal_sound_elapsed = 0.0
+	if _animal_audio.stream != null:
+		_animal_audio.play()
+
+
+func _on_visible_on_screen_notifier_2d_screen_exited() -> void:
+	if Engine.is_editor_hint():
+		return
+	_stop_animal_sound()
+
+func _stop_animal_sound() -> void:
+	_animal_sound_elapsed = 0.0
+	if _animal_audio != null and _animal_audio.playing:
+		_animal_audio.stop()
+
 func _process(delta: float) -> void:
-	if not $AnimalVisible.is_on_screen():
+	# @tool 只用于编辑器预览外观；音效只能在实际游戏运行时处理。
+	if Engine.is_editor_hint():
+		return
+	if not _alive or not is_visible_in_tree() or _screen_notifier == null or _animal_audio == null:
+		_stop_animal_sound()
+		return
+	if not _screen_notifier.is_on_screen():
+		_stop_animal_sound()
 		return
 
-	if $AnimalSound.playing:
+	if _animal_audio.playing:
 		_animal_sound_elapsed = 0.0
 		return
 
@@ -372,18 +405,5 @@ func _process(delta: float) -> void:
 
 	if _animal_sound_elapsed >= animal_sound_interval:
 		_animal_sound_elapsed = 0.0
-		$AnimalSound.play()
-
-
-# 动物进入画面时，立即播放叫声
-func _on_animal_visible_screen_entered() -> void:
-	_animal_sound_elapsed = 0.0
-
-	if $AnimalSound.stream != null:
-		$AnimalSound.play()
-
-
-# 动物离开画面时，停止叫声
-func _on_animal_visible_screen_exited() -> void:
-	$AnimalSound.stop()
-	_animal_sound_elapsed = 0.0
+		if _animal_audio.stream != null:
+			_animal_audio.play()

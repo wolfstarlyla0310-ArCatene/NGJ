@@ -6,7 +6,7 @@ extends Area2D
 
 const TILE_SIZE := 16.0
 
-@export var move_speed := 30.0
+@export var move_speed := 40.0
 @export var push_speed := 220.0
 @export var push_duration := 0.25
 
@@ -20,7 +20,7 @@ const TILE_SIZE := 16.0
 ## 连发间隔（秒）。
 @export var visual_burst_interval := 0.1
 ## 两轮之间的间隔（秒）。
-@export var visual_cycle_interval := 1.0
+@export var visual_cycle_interval := 2.0
 @export var visual_color := Color(1.0, 0.2, 0.2, 1.0)
 
 var sound_fields: Node2D = null

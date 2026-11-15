@@ -57,6 +57,8 @@ func _ready() -> void:
 	if puzzle_door_manager != null:
 		puzzle_door_manager.setup(get_rooms())
 	_update_room_culling(true)
+	_restart_checkpoint_waves()
+	noise.sync_visibility(_active_sound_field_rects())
 
 func _is_explicit_start_room() -> bool:
 	return start_room != null and is_instance_valid(start_room) \
@@ -177,6 +179,15 @@ func _checkpoint_in_room(room: Room) -> Checkpoint:
 			return checkpoint
 	return null
 
+func _restart_checkpoint_waves(room: Room = null) -> void:
+	for checkpoint in _checkpoints:
+		if not is_instance_valid(checkpoint) or checkpoint.is_queued_for_deletion() \
+				or checkpoint.process_mode == Node.PROCESS_MODE_DISABLED:
+			continue
+		if room != null and _room_of(checkpoint.global_position) != room:
+			continue
+		checkpoint.restart_wave()
+
 ## —— 单房间 R / 噪音死亡 ——
 
 func reset_to_checkpoint() -> void:
@@ -194,7 +205,6 @@ func reset_to_checkpoint() -> void:
 	for field in sound_fields.get_children():
 		if field is SoundField and not field.persistent:
 			field.queue_free()
-	noise.sync_visibility([])
 	player.reset_to(_checkpoint_position)
 	_culled_room = null
 	_update_room_culling(true)
@@ -209,6 +219,10 @@ func reset_to_checkpoint() -> void:
 				door.call("restore")
 		if puzzle_door_manager != null:
 			puzzle_door_manager.reset_room(room)
+	# 必须放在清掉旧声场之后，且在复活后的任何危险判定之前同步完成。
+	_restart_checkpoint_waves()
+	noise.sync_visibility(_active_sound_field_rects())
+	if room != null:
 		room_reset.emit(room)
 
 ## —— 声场 ——
@@ -298,12 +312,15 @@ func _update_room_culling(force := false) -> void:
 			continue
 		var node_room := _room_of(node_2d.global_position)
 		var active := node_room == null or active_rooms.has(node_room)
+		var was_active := node.process_mode != Node.PROCESS_MODE_DISABLED
 		node.process_mode = Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
 		if node is CanvasItem:
 			var alive := not (node is Animal) or (node as Animal).is_alive()
 			(node as CanvasItem).visible = active and alive
 		if node is Checkpoint:
 			(node as Checkpoint).set_deferred("monitoring", active)
+			if active and not was_active:
+				(node as Checkpoint).restart_wave()
 		if node.is_in_group("collectible") or node.is_in_group("spike_monster"):
 			var area := node as Area2D
 			if area != null:
@@ -373,6 +390,7 @@ func _refresh_room(room: Room) -> void:
 		puzzle_door_manager.reset_room(room)
 	_reset_animals_in_room(room)
 	_reset_monsters_in_room(room)
+	_restart_checkpoint_waves(room)
 
 func _reset_animals_in_room(room: Room) -> void:
 	for node in get_tree().get_nodes_in_group("animal"):

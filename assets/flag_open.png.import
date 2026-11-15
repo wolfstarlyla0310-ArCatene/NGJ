@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://5du34h2wo7e3"
-path="res://.godot/imported/？.png-5ffa36265c58fa645cea667e857447cd.ctex"
+uid="uid://cqbebva32y3jb"
+path="res://.godot/imported/flag_open.png-16254a004eb884560f8374faecab5662.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tips/？.png"
-dest_files=["res://.godot/imported/？.png-5ffa36265c58fa645cea667e857447cd.ctex"]
+source_file="res://assets/flag_open.png"
+dest_files=["res://.godot/imported/flag_open.png-16254a004eb884560f8374faecab5662.ctex"]
 
 [params]
 
