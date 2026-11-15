@@ -69,13 +69,29 @@ func _run() -> void:
 	check(small.visible_border_rects().is_empty(), "Contained same-color field has no visible border")
 	check(big.visible_border_rects().size() == 4, "Outer same-color field keeps its border")
 
-	# 4. 异色重叠：互不去除，边界完整。
+	# 4. 等级覆盖：黄 > 蓝 > 白；被覆盖场的重叠边消失，覆盖场保留。
 	var c4 := _container()
+	var yellow := SoundField.color_for_level(2)
 	var white4 := _make_field(c4, Vector2(0, 0), 64.0, white)
 	var blue4 := _make_field(c4, Vector2(24, 24), 64.0, blue)
-	check(white4.visible_border_rects().size() == 4 and blue4.visible_border_rects().size() == 4,
-		"Different-color overlap keeps both borders")
-	check(_pieces_inside(white4, blue4) > 0, "Different-color borders are not removed")
+	var yellow4 := _make_field(c4, Vector2(48, 48), 64.0, yellow)
+	check(_pieces_inside(white4, blue4) == 0, "Blue covers the overlapped white border")
+	check(_pieces_inside(blue4, yellow4) == 0, "Yellow covers the overlapped blue border")
+	check(_pieces_inside(yellow4, blue4) > 0, "Yellow border is not covered by blue")
+	check(white4.visible_border_rects().size() > 0 and blue4.visible_border_rects().size() > 0 \
+		and yellow4.visible_border_rects().size() > 0,
+		"Covering hierarchy keeps visible borders")
+	check(white4.z_index < blue4.z_index and blue4.z_index < yellow4.z_index,
+		"Field draw order is white < blue < yellow")
+
+	# 4b. 红色等非标准色只与同色合并，不被标准色覆盖。
+	var c4b := _container()
+	var red := Color(1.0, 0.2, 0.2, 1.0)
+	var red4 := _make_field(c4b, Vector2(0, 0), 64.0, red)
+	var blue4b := _make_field(c4b, Vector2(24, 24), 64.0, blue)
+	check(red4.visible_border_rects().size() == 4 and blue4b.visible_border_rects().size() == 4,
+		"Red fields are not covered by standard colors")
+	check(_pieces_inside(red4, blue4b) > 0, "Red border stays inside blue")
 
 	# 5. 同色仅相接（共享一条边）：公共边保留，无缺口。
 	var c5 := _container()
@@ -108,7 +124,7 @@ func _run() -> void:
 	hidden8.visible = false
 	check(visible8.visible_border_rects().size() == 4, "Hidden same-color field does not occlude")
 
-	for container in [c1, c2, c3, c4, c5, c6, c7a, c7b, c8]:
+	for container in [c1, c2, c3, c4, c4b, c5, c6, c7a, c7b, c8]:
 		container.queue_free()
 	await process_frame
 	print("\nSound field border checks: ", "ALL PASSED" if failures.is_empty() else "%d FAILED" % failures.size())

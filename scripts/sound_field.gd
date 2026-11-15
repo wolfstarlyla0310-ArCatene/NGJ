@@ -14,7 +14,11 @@ const LV2_LIFETIME := 2.0
 ## 从中心扩到目标边长所需时间（秒）。
 @export var expand_duration: float = 0.2
 ## 线框颜色；玩家声场白色，刺/死亡声场红色。
-@export var color := Color(1.0, 1.0, 1.0, 1.0)
+## setter 同时按颜色等级设置绘制层级：黄 > 蓝 > 白。
+@export var color := Color(1.0, 1.0, 1.0, 1.0):
+	set(value):
+		color = value
+		z_index = maxi(color_rank(value), 0)
 ## 接触是否杀死玩家。
 @export var lethal := false
 ## 是否提供噪音免疫并隐藏噪音格。玩家声场 true，刺/死亡声场 false。
@@ -39,6 +43,19 @@ static func color_for_level(field_level: int) -> Color:
 			return Color(1.0, 0.9, 0.2, 1.0)
 		_:
 			return Color.WHITE
+
+## 标准声场颜色的覆盖等级：白 0 < 蓝 1 < 黄 2；其它颜色（红等）返回 -1，不参与等级覆盖。
+static func color_rank(field_color: Color) -> int:
+	if _rgb_equal(field_color, Color.WHITE):
+		return 0
+	if _rgb_equal(field_color, color_for_level(1)):
+		return 1
+	if _rgb_equal(field_color, color_for_level(2)):
+		return 2
+	return -1
+
+static func _rgb_equal(a: Color, b: Color) -> bool:
+	return is_equal_approx(a.r, b.r) and is_equal_approx(a.g, b.g) and is_equal_approx(a.b, b.b)
 
 ## 把以 `origin` 为中心、边长为 `side` 的方形声场吸附到 16px 网格：
 ## 将声场左上角取整到最近的格线，从而覆盖整格（副作用：中心最多偏移 8px）。
@@ -101,9 +118,14 @@ func _occluders() -> Array[Rect2]:
 		if child == self or not child is SoundField:
 			continue
 		var other := child as SoundField
-		if other.is_queued_for_deletion() or not other.visible or not _is_same_family(other):
+		if other.is_queued_for_deletion() or not other.visible:
 			continue
-		rects.append(other.drawn_world_rect())
+		# 同色合并；标准色之间按等级单向覆盖：黄 > 蓝 > 白。
+		var self_rank := color_rank(color)
+		var other_rank := color_rank(other.color)
+		var covers := _is_same_family(other) or (self_rank >= 0 and other_rank > self_rank)
+		if covers:
+			rects.append(other.drawn_world_rect())
 	return rects
 
 ## 当前可见的边界分段（世界坐标、厚度 line_width）；同类重叠处的内部边段已去掉。

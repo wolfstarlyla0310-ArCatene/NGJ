@@ -281,6 +281,7 @@ func _die() -> void:
 		return
 	_dead = true
 	deaths += 1
+	player.play_death_sound()
 	player.controls_enabled = false
 	player.velocity = Vector2.ZERO
 	player.visible = false

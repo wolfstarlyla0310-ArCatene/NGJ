@@ -1,5 +1,27 @@
 # 验证记录
 
+2026-11-15（修复玩家死亡音效不播放）
+
+- `world_map.gd`：`_die()`（噪音致死与刺怪接触共用）此前只隐藏玩家、生成红色死亡声场，**从未调用 `player.play_death_sound()`**，所以正式大地图里死亡没有声音（测试关 `wave_jump_lab.gd` 一直有调用）。现在 `_die()` 在隐藏玩家前调用 `player.play_death_sound()`；该函数在 `get_tree().root` 下创建一次性 `AudioStreamPlayer`（继承 DieSound 的 stream/音量/pitch/bus），玩家隐藏或重置都不会截断音效。
+- 测试：`big_map_checks` 73 → **74**，新增「Player death plays the death sound」；本机无头运行 **74 全过**。
+
+2026-11-15（音频总控器：检查器统一调所有音量）
+
+- `default_bus_layout.tres`：新增 `Jump` / `Drop` / `Pickup` / `Glass` / `Noise` / `Button` 六条总线（均 0 dB，发送到 `Master`），与原有 `Move` / `Die` / `Animal` 一起组成 9 条类别总线 + Master。
+- `scripts/audio/audio_settings.gd` + `resources/audio_settings.tres`：在同一个 `AudioSettings` 资源里新增 `master_db`、`jump_db`、`drop_db`、`pickup_db`、`glass_db`、`noise_db`、`button_db`（默认 0 dB；保留 `move_db=-12`、`animal_db=-6`）。全部带 `@export_range(-80, 6)`，在检查器里直接调。
+- `scripts/audio/audio_manager.gd`：`CATEGORY_BUSES` 增加 master/jump/drop/pickup/glass/noise/button；`apply_settings()` 改为遍历 `CATEGORY_BUSES`，按 `<category>_db` 写入总线，新增类别无需再逐条手写。
+- 场景音源接入总线：`player.tscn` 的 `BlueDropSound`→`Jump`、`YellowDropSound`→`Drop`、`PickUpSound`→`Pickup`；`big_map.tscn` 的 `Noise/NoiseSound`→`Noise`、`Breakables/GlassBreakingSound`→`Glass`；`wave_jump_lab.tscn` 的 `GlassBreakingSound`→`Glass`；`button_once.tscn` / `button_rebound.tscn` 的 `BottonSound`→`Button`。
+- 测试：`audio_node_checks` 25 → **33**（新增全部总线存在、玩家 Jump/Drop/Pickup 与地图 Noise/Glass、测试关 Glass、两个按钮场景的路由、`AudioManager` 逐类别应用音量、Master 音量跟随 `AudioSettings`）。
+- 本机结果：`audio_node_checks` **33 全过**（窗口运行）；`big_map` / `checkpoint_wave` / `button_door` / `collectible` / `sound_field_border` / `spike` / `barrier` / `door_animal` / `keyboard` 全部通过。
+
+2026-11-15（声场等级覆盖 / 刺怪状态颜色 / 目标死亡后停止追逐）
+
+- `sound_field.gd`：新增 `color_rank()`（白 0 < 蓝 1 < 黄 2，其它颜色 -1）与 RGB-only `_rgb_equal()`；`_occluders()` 改为「同色合并 **或** 对方颜色等级更高」——黄覆盖蓝、蓝覆盖白，被覆盖声场落在覆盖声场矩形内的边段消失，覆盖场边界保留。`color` 增加 setter，按颜色等级设置 `z_index`（白 0 / 蓝 1 / 黄 2，红色回落 0），绘制顺序与覆盖关系一致。红色等非标准色只与同色合并，不参与等级覆盖。判定路径不变。
+- `spike_monster.gd`：新增 `visual_push_color`（蓝）/ `visual_freeze_color`（黄）；`_physics_process()` 先计算 lv2 定住与 lv1 击退状态并写入 `_state_color`，再生成视觉脉冲；`_spawn_visual_burst()` 使用 `_state_color`（仍 `level = 0`，纯视觉）。`spike_field.gd` 增加对应导出并写入每只怪。
+- `spike_monster.gd`：`_pick_target()` 跳过 `Animal.is_alive() == false` 的已消耗动物。目标死亡后每帧重新选目标：有其它活目标则换，没有则 `_velocity = ZERO` 停止，不再停在尸体位置。
+- 测试：`sound_field_border_checks` 14 → **19**（黄>蓝>白覆盖、被覆盖边消失、z 序、红色不参与）；`spike_checks` 22 → **28**（击退蓝、定住黄、目标死亡后不再选中/停止/换目标）。同时把红色脉冲断言从硬编码 48px 改为读取怪物 `visual_side_cells`，兼容场景里 `monster_visual_side_cells = 2.5`。
+- 本机结果：`sound_field_border_checks` **19 全过**、`spike_checks` **28 全过**；`keyboard_movement` / `big_map` / `checkpoint_wave` / `trigger` / `barrier` / `collectible` / `door_animal` / `button_door` 全部通过。
+
 2026-11-15（玩家小跳/小顶头音效）
 
 - `scenes/actors/player.tscn`：`BlueDropSound`（lv1 落地「小跳」与 lv1 顶头「小顶头」共用的音源）的 stream 改为 `res://assets/sound/player_jump.wav`（与 `MoveSound` 同一文件）；删除不再使用的蓝落地 mp3 ext_resource。大跳/大顶头仍走 `YellowDropSound`。

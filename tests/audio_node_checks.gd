@@ -77,13 +77,33 @@ func _run() -> void:
 	var move_bus := AudioServer.get_bus_index("Move")
 	var die_bus := AudioServer.get_bus_index("Die")
 	var animal_bus := AudioServer.get_bus_index("Animal")
-	check(move_bus >= 0 and die_bus >= 0 and animal_bus >= 0,
-		"Move/Die/Animal audio buses exist")
-	if manager != null and move_bus >= 0:
+	var jump_bus := AudioServer.get_bus_index("Jump")
+	var drop_bus := AudioServer.get_bus_index("Drop")
+	var pickup_bus := AudioServer.get_bus_index("Pickup")
+	var glass_bus := AudioServer.get_bus_index("Glass")
+	var noise_bus := AudioServer.get_bus_index("Noise")
+	var button_bus := AudioServer.get_bus_index("Button")
+	check(move_bus >= 0 and die_bus >= 0 and animal_bus >= 0
+		and jump_bus >= 0 and drop_bus >= 0 and pickup_bus >= 0
+		and glass_bus >= 0 and noise_bus >= 0 and button_bus >= 0,
+		"Every audio category bus exists")
+	var yellow_drop := player.get_node_or_null("YellowDropSound") as AudioStreamPlayer
+	var pickup_sound := player.get_node_or_null("PickUpSound") as AudioStreamPlayer
+	check(small_jump.bus == &"Jump" and yellow_drop != null and yellow_drop.bus == &"Drop"
+		and pickup_sound != null and pickup_sound.bus == &"Pickup",
+		"Player jump/drop/pickup sounds route to Jump/Drop/Pickup buses")
+	if manager != null:
 		var settings_obj := manager.get("settings") as Resource
-		var move_db: float = float(settings_obj.get("move_db")) if settings_obj != null else 0.0
-		check(absf(AudioServer.get_bus_volume_db(move_bus) - move_db) < 0.1,
-			"Move bus volume follows AudioSettings")
+		var all_applied := true
+		for category: StringName in manager.CATEGORY_BUSES:
+			var bus_idx := AudioServer.get_bus_index(String(manager.CATEGORY_BUSES[category]))
+			var expected: float = float(settings_obj.get(String(category) + "_db"))
+			all_applied = all_applied and bus_idx >= 0 \
+				and absf(AudioServer.get_bus_volume_db(bus_idx) - expected) < 0.1
+		check(all_applied, "AudioManager applies every volume from AudioSettings")
+		var master_db: float = float(settings_obj.get("master_db"))
+		check(absf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master")) - master_db) < 0.1,
+			"Master bus volume follows AudioSettings")
 	# 动物叫声随玩家曼哈顿距离衰减，8 格（128px）为最远可听距离。
 	animal.global_position = Vector2.ZERO
 	player.global_position = Vector2.ZERO
@@ -125,7 +145,24 @@ func _run() -> void:
 		complete = complete and placed.has_node("AnimalSound") and placed.has_node("VisibleOnScreenNotifier2D")
 	check(complete, "Every placed map animal inherits the required nodes")
 	check(map.player.move_audio != null and map.player.die_audio != null, "Map player inherits the required audio nodes")
+	var noise_audio := map.get_node_or_null("Noise/NoiseSound") as AudioStreamPlayer
+	var map_glass := map.get_node_or_null("Breakables/GlassBreakingSound") as AudioStreamPlayer
+	check(noise_audio != null and noise_audio.bus == &"Noise", "Noise cue routes to the Noise bus")
+	check(map_glass != null and map_glass.bus == &"Glass", "Map glass breakage routes to the Glass bus")
 	map.queue_free()
 	await process_frame
+
+	var lab: Node = load("res://scenes/levels/wave_jump_lab.tscn").instantiate()
+	var lab_glass := lab.get_node_or_null("Breakables/GlassBreakingSound") as AudioStreamPlayer
+	check(lab_glass != null and lab_glass.bus == &"Glass", "Lab glass breakage routes to the Glass bus")
+	lab.free()
+	var button_scenes := ["res://scenes/world/button_once.tscn", "res://scenes/world/button_rebound.tscn"]
+	var buttons_routed := true
+	for path: String in button_scenes:
+		var button: Node = load(path).instantiate()
+		var button_audio := button.get_node_or_null("BottonSound") as AudioStreamPlayer2D
+		buttons_routed = buttons_routed and button_audio != null and button_audio.bus == &"Button"
+		button.free()
+	check(buttons_routed, "Button sounds route to the Button bus")
 	print("\nAudio node checks: ", "ALL PASSED" if failures.is_empty() else "%d FAILED" % failures.size())
 	quit(0 if failures.is_empty() else 1)

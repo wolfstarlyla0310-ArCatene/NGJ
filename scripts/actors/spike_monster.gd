@@ -22,8 +22,13 @@ const TILE_SIZE := 16.0
 ## 两轮之间的间隔（秒）。
 @export var visual_cycle_interval := 2.0
 @export var visual_color := Color(1.0, 0.2, 0.2, 1.0)
+## 被玩家 lv1 波击退期间的视觉颜色（蓝色）。
+@export var visual_push_color := Color(0.3, 0.65, 1.0, 1.0)
+## 被玩家 lv2 波定住期间的视觉颜色（黄色）。
+@export var visual_freeze_color := Color(1.0, 0.9, 0.2, 1.0)
 
 var sound_fields: Node2D = null
+var _state_color := Color(1.0, 0.2, 0.2, 1.0)
 
 var _offsets: Array[Vector2] = []
 var _bounds_size := Vector2(TILE_SIZE, TILE_SIZE)
@@ -44,6 +49,7 @@ func setup(world_center: Vector2, offsets: Array[Vector2], bounds_size: Vector2)
 	_home = world_center
 	_offsets = offsets
 	_bounds_size = bounds_size
+	_state_color = visual_color  # 读到场景/SpikeField 的覆盖值。
 	collision_layer = 0
 	collision_mask = 6  # 玩家层 2 + 动物层 4
 	monitorable = false
@@ -61,11 +67,19 @@ func setup(world_center: Vector2, offsets: Array[Vector2], bounds_size: Vector2)
 func _physics_process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
-	_emit_visual(delta)
 	_resolve_room()
 	var bounds := _bounds()
+	var frozen := _overlaps_level(2, bounds)
+	# 视觉颜色：定住（黄）优先于击退（蓝）优先于默认红。
+	if frozen:
+		_state_color = visual_freeze_color
+	elif _push_remaining > 0.0:
+		_state_color = visual_push_color
+	else:
+		_state_color = visual_color
+	_emit_visual(delta)
 	# lv2：定住，不推走。
-	if _overlaps_level(2, bounds):
+	if frozen:
 		_velocity = Vector2.ZERO
 		_push_remaining = 0.0
 		return
@@ -117,7 +131,7 @@ func _spawn_visual_burst() -> void:
 		field.level = 0
 		field.lethal = false
 		field.safe_for_player = false
-		field.color = visual_color
+		field.color = _state_color
 		fields.add_child(field)
 		field.global_position = global_position + offset
 
@@ -202,7 +216,8 @@ func _pick_target() -> Node2D:
 					best = player
 	for child in get_tree().get_nodes_in_group("animal"):
 		var animal := child as Animal
-		if animal == null or animal.is_queued_for_deletion():
+		# 被吃掉/消耗的动物会保留节点但 is_alive() == false，不能再当目标。
+		if animal == null or animal.is_queued_for_deletion() or not animal.is_alive():
 			continue
 		if not _in_same_room(animal):
 			continue

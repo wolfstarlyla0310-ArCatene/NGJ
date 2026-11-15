@@ -25,6 +25,7 @@ script = ExtResource("4_breakables")
 
 [node name="GlassBreakingSound" type="AudioStreamPlayer" parent="Breakables"]
 stream = ExtResource("11_glass")
+bus = &"Glass"
 
 [node name="Lv1" type="TileMapLayer" parent="Breakables" unique_id=809784310]
 tile_map_data = PackedByteArray("AAAiACAAAAADAAUAAAAjACAAAAAFAAUAAAA=")

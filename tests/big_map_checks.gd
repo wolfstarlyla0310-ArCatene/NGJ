@@ -228,6 +228,14 @@ func _run() -> void:
 	check(level.deaths > deaths_before, "Standing in noise without a sound field kills the player")
 	check(level.is_dead(), "Noise death waits for R before resetting")
 	check(not level.player.visible, "Player is hidden on death")
+	var die_stream: AudioStream = level.player.die_audio.stream if level.player.die_audio != null else null
+	var death_sound_played := false
+	for child in root.get_children():
+		if child is AudioStreamPlayer and child.stream == die_stream and (child as AudioStreamPlayer).playing:
+			death_sound_played = true
+			(child as AudioStreamPlayer).stop()
+			child.queue_free()
+	check(die_stream != null and death_sound_played, "Player death plays the death sound")
 	var restart_event := InputEventAction.new()
 	restart_event.action = &"restart"
 	restart_event.pressed = true

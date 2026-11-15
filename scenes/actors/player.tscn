@@ -37,9 +37,12 @@ bus = &"Die"
 
 [node name="BlueDropSound" type="AudioStreamPlayer" parent="." unique_id=515729678]
 stream = ExtResource("3_move_sound")
+bus = &"Jump"
 
 [node name="YellowDropSound" type="AudioStreamPlayer" parent="." unique_id=973183700]
 stream = ExtResource("6_yellow_drop")
+bus = &"Drop"
 
 [node name="PickUpSound" type="AudioStreamPlayer" parent="." unique_id=430408394]
 stream = ExtResource("7_pickup")
+bus = &"Pickup"

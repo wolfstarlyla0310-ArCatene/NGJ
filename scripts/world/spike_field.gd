@@ -29,6 +29,10 @@ const MONSTER_SCRIPT := preload("res://scripts/actors/spike_monster.gd")
 ## 单个红色短声场寿命（秒）。
 @export var monster_visual_lifetime := 0.2
 @export var monster_visual_color := Color(1.0, 0.2, 0.2, 1.0)
+## 被玩家 lv1 波击退期间的颜色（蓝色）。
+@export var monster_visual_push_color := Color(0.3, 0.65, 1.0, 1.0)
+## 被玩家 lv2 波定住期间的颜色（黄色）。
+@export var monster_visual_freeze_color := Color(1.0, 0.9, 0.2, 1.0)
 
 var _monsters: Array[Node] = []
 
@@ -58,6 +62,8 @@ func _spawn_monsters() -> void:
 		monster.set("visual_side_cells", monster_visual_side_cells)
 		monster.set("visual_lifetime", monster_visual_lifetime)
 		monster.set("visual_color", monster_visual_color)
+		monster.set("visual_push_color", monster_visual_push_color)
+		monster.set("visual_freeze_color", monster_visual_freeze_color)
 		root.add_child(monster)
 		monster.call("setup", group_center, offsets, bounds.size)
 		_monsters.append(monster)
