@@ -5,7 +5,7 @@
 [ext_resource type="Script" uid="uid://d2r82au5nejjl" path="res://scripts/breakables.gd" id="3_breakables"]
 [ext_resource type="TileSet" uid="uid://cp2nd50h3p22b" path="res://resources/lv1_tileset.tres" id="4_lv1"]
 [ext_resource type="TileSet" uid="uid://d2eo6vu4rjpai" path="res://resources/lv2_tileset.tres" id="5_lv2"]
-[ext_resource type="AudioStream" uid="uid://b73dad7nvgscy" path="res://assets/sound/noise2.wav" id="5_nxb12"]
+[ext_resource type="AudioStream" uid="uid://benheapjukfc8" path="res://assets/sound/noise.wav" id="5_m6fow"]
 [ext_resource type="Script" uid="uid://bawjpxul8w6li" path="res://scripts/noise_field.gd" id="6_noise"]
 [ext_resource type="TileSet" uid="uid://hpebaasxf5vw" path="res://resources/noise_tileset.tres" id="7_noise_tiles"]
 [ext_resource type="PackedScene" uid="uid://0o65jgx0cps0" path="res://scenes/actors/player.tscn" id="8_player"]
@@ -27,7 +27,6 @@
 [ext_resource type="PackedScene" path="res://scenes/world/collectible.tscn" id="18_vbl2u"]
 [ext_resource type="TileSet" uid="uid://bfyxcsbfd1gdt" path="res://resources/door_tileset.tres" id="19_door_tiles"]
 [ext_resource type="Script" uid="uid://dh8dmp7m7qroo" path="res://scripts/world/puzzle_door_manager.gd" id="20_door_manager"]
-[ext_resource type="AudioStream" uid="uid://kb3k80fapx5d" path="res://assets/sound/PickUP/pickup.mp3" id="23_nxb12"]
 [ext_resource type="PackedScene" path="res://scenes/world/button_once.tscn" id="24_cmc5e"]
 [ext_resource type="AudioStream" uid="uid://cr8nrrq5nm15c" path="res://assets/sound/GlassBreaking/dragon-studio-glass-breaking-504033.mp3" id="25_glass"]
 
@@ -46,6 +45,12 @@ tile_map_data = PackedByteArray("AAASAPv/AAAAAAAAAAASAPz/AAAAAAAAAAASAP3/AAAAAAA
 tile_set = ExtResource("7_noise_tiles")
 collision_enabled = false
 script = ExtResource("6_noise")
+
+[node name="NoiseSound" type="AudioStreamPlayer" parent="Noise" unique_id=156700261]
+stream = ExtResource("5_m6fow")
+bus = &"Noise"
+
+[node name="VisibleOnScreenNotifier2D" type="VisibleOnScreenNotifier2D" parent="Noise" unique_id=2117313311]
 
 [node name="Node2D" type="Node2D" parent="." unique_id=621144936]
 
@@ -82,6 +87,7 @@ script = ExtResource("3_breakables")
 [node name="GlassBreakingSound" type="AudioStreamPlayer" parent="Breakables" unique_id=1163565827]
 stream = ExtResource("25_glass")
 volume_db = -20.678
+bus = &"Glass"
 
 [node name="Lv1" type="TileMapLayer" parent="Breakables" unique_id=259404461]
 tile_map_data = PackedByteArray("AAC6ACsAAAAGAAQAAAC6ACwAAAAFAAQAAAC6AC0AAAAFAAQAAAC6AC4AAAAEAAMAAAC6AC8AAAAFAAQAAAC6ADAAAAAFAAQAAAC6ADEAAAAFAAQAAAC6ADIAAAAEAAQAAAC7ACsAAAAAAAUAAAC7AC4AAAAAAAUAAAC7ADIAAAAAAAUAAAC8ACsAAAAAAAUAAAC8AC4AAAAAAAUAAAC8ADIAAAAAAAUAAAC9ACsAAAAAAAUAAAC9AC4AAAAFAAUAAAC9ADIAAAAAAAUAAAC+ACsAAAAFAAUAAAC+ADIAAAAFAAUAAADBAC8AAAAGAAQAAADBADAAAAAFAAQAAADBADEAAAAFAAQAAADBADIAAAACAAUAAADCAC8AAAAAAAUAAADDAC8AAAAFAAUAAADEADAAAAAEAAUAAADEADEAAAAFAAQAAADEADIAAAACAAUAAADHADAAAAAEAAUAAADHADEAAAAFAAQAAADHADIAAAAEAAQAAADIAC8AAAADAAUAAADIADIAAAAAAAUAAADJAC8AAAAAAAUAAADJADIAAAAAAAUAAADKACwAAAAEAAUAAADKAC0AAAAFAAQAAADKAC4AAAAFAAQAAADKAC8AAAAGAAMAAADKADAAAAAFAAQAAADKADEAAAAFAAQAAADKADIAAAAHAAQAAADNAC4AAAAEAAUAAADNAC8AAAAFAAQAAADNADAAAAACAAUAAADNADIAAAAGAAUAAAA=")
@@ -93,7 +99,7 @@ tile_map_data = PackedByteArray("AACEAP//AAAFAAUAAACDAP//AAADAAUAAACeAPz/AAADAAU
 tile_set = ExtResource("5_lv2")
 collision_enabled = false
 
-[node name="Spikes" type="TileMapLayer" parent="." unique_id=1937420101 node_paths=PackedStringArray("sound_fields", "breakables", "player")]
+[node name="Spikes" type="TileMapLayer" parent="." unique_id=1937420101 node_paths=PackedStringArray("sound_fields", "breakables")]
 z_index = 3
 tile_map_data = PackedByteArray("AACJABsAAAAAAAAAAACJABwAAAAAAAAAAACKABsAAAAAAAAAAACKABwAAAAAAAAAAACeABkAAAAAAAAAAACeABoAAAAAAAAAAACfABkAAAAAAAAAAACfABoAAAAAAAAAAACiABgAAAAAAAAAAABgABwAAAAAAAAAAABiABkAAAAAAAAAAABiABoAAAAAAAAAAABjABkAAAAAAAAAAABjABoAAAAAAAAAAABvABkAAAAAAAAAAABwABkAAAAAAAAAAABvABgAAAAAAAAAAABwABgAAAAAAAAAAAA=")
 tile_set = ExtResource("12_spike_tiles")
@@ -101,13 +107,8 @@ collision_enabled = false
 script = ExtResource("13_spike_field")
 sound_fields = NodePath("../SoundFields")
 breakables = NodePath("../Breakables")
-player = NodePath("../Player")
-monster_sound_distance = 48.0
-monster_sound_fade_speed = 2.6
 monster_visual_cycle_interval = 0.2
-
-[node name="MonsterSound" type="AudioStreamPlayer" parent="Spikes" unique_id=1004511645]
-stream = ExtResource("5_nxb12")
+monster_visual_side_cells = 2.5
 
 [node name="Monsters" type="Node2D" parent="." unique_id=2518607]
 z_index = 3
@@ -140,86 +141,44 @@ z_index = 3
 [node name="Checkpoint1" parent="Objects" unique_id=287388710 instance=ExtResource("11_checkpoint")]
 position = Vector2(149, 231)
 
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint1" unique_id=253448154]
-stream = ExtResource("23_nxb12")
-
 [node name="Checkpoint2" parent="Objects" unique_id=81973759 instance=ExtResource("11_checkpoint")]
 position = Vector2(603, 231)
-
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint2" unique_id=1231742402]
-stream = ExtResource("23_nxb12")
 
 [node name="Checkpoint3" parent="Objects" unique_id=471374624 instance=ExtResource("11_checkpoint")]
 position = Vector2(1016, 231)
 
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint3" unique_id=1532060511]
-stream = ExtResource("23_nxb12")
-
 [node name="Checkpoint4" parent="Objects" unique_id=1511098424 instance=ExtResource("11_checkpoint")]
 position = Vector2(1525, 231)
-
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint4" unique_id=1060261521]
-stream = ExtResource("23_nxb12")
 
 [node name="Checkpoint6" parent="Objects" unique_id=1307762975 instance=ExtResource("11_checkpoint")]
 position = Vector2(1991, -89)
 
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint6" unique_id=1965010884]
-stream = ExtResource("23_nxb12")
-
 [node name="Checkpoint7" parent="Objects" unique_id=153851442 instance=ExtResource("11_checkpoint")]
 position = Vector2(2455, -89)
-
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint7" unique_id=111016583]
-stream = ExtResource("23_nxb12")
 
 [node name="Checkpoint8" parent="Objects" unique_id=1588481427 instance=ExtResource("11_checkpoint")]
 position = Vector2(1688, 519)
 
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint8" unique_id=460969887]
-stream = ExtResource("23_nxb12")
-
 [node name="Checkpoint9" parent="Objects" unique_id=298767222 instance=ExtResource("11_checkpoint")]
 position = Vector2(2040, 519)
-
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint9" unique_id=948696548]
-stream = ExtResource("23_nxb12")
 
 [node name="Checkpoint10" parent="Objects" unique_id=509376881 instance=ExtResource("11_checkpoint")]
 position = Vector2(2520, 519)
 
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint10" unique_id=463907118]
-stream = ExtResource("23_nxb12")
-
 [node name="Checkpoint11" parent="Objects" unique_id=1238650514 instance=ExtResource("11_checkpoint")]
 position = Vector2(2971, 519)
-
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint11" unique_id=701651121]
-stream = ExtResource("23_nxb12")
 
 [node name="Checkpoint12" parent="Objects" unique_id=2064465273 instance=ExtResource("11_checkpoint")]
 position = Vector2(2089, 231)
 
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint12" unique_id=203822565]
-stream = ExtResource("23_nxb12")
-
 [node name="Checkpoint13" parent="Objects" unique_id=736367335 instance=ExtResource("11_checkpoint")]
 position = Vector2(2314, -25)
-
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint13" unique_id=1099483299]
-stream = ExtResource("23_nxb12")
 
 [node name="Checkpoint14" parent="Objects" unique_id=92399946 instance=ExtResource("11_checkpoint")]
 position = Vector2(1584, -201)
 
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint14" unique_id=1915558458]
-stream = ExtResource("23_nxb12")
-
 [node name="Checkpoint15" parent="Objects" unique_id=462543573 instance=ExtResource("11_checkpoint")]
 position = Vector2(1215, 519)
-
-[node name="CheckpointSound" type="AudioStreamPlayer" parent="Objects/Checkpoint15" unique_id=1045245334]
-stream = ExtResource("23_nxb12")
 
 [node name="Rooms" type="Node2D" parent="." unique_id=1359688628]
 
@@ -424,3 +383,6 @@ buttons_root = NodePath("../Buttons")
 
 [node name="Player" parent="." unique_id=262401040 instance=ExtResource("8_player")]
 position = Vector2(194, 229)
+
+[connection signal="screen_entered" from="Noise/VisibleOnScreenNotifier2D" to="Noise" method="_on_visible_on_screen_notifier_2d_screen_entered"]
+[connection signal="screen_exited" from="Noise/VisibleOnScreenNotifier2D" to="Noise" method="_on_visible_on_screen_notifier_2d_screen_exited"]

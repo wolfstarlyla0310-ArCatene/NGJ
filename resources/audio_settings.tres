@@ -1,9 +1,7 @@
-[gd_resource type="Resource" script_class="AudioSettings" format=3]
+[gd_resource type="Resource" script_class="AudioSettings" format=3 uid="uid://dmwjly7co1obx"]
 
-[ext_resource type="Script" path="res://scripts/audio/audio_settings.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://xpxjfc72y8yw" path="res://scripts/audio/audio_settings.gd" id="1_script"]
 
 [resource]
 script = ExtResource("1_script")
-move_db = -12.0
-die_db = 0.0
-animal_db = -6.0
+die_db = 6.0

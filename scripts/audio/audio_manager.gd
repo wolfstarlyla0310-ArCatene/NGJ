@@ -3,9 +3,16 @@ extends Node
 ## 音量集中在 resources/audio_settings.tres 里调整。
 
 const CATEGORY_BUSES := {
+	&"master": &"Master",
 	&"move": &"Move",
 	&"die": &"Die",
 	&"animal": &"Animal",
+	&"jump": &"Jump",
+	&"drop": &"Drop",
+	&"pickup": &"Pickup",
+	&"glass": &"Glass",
+	&"noise": &"Noise",
+	&"button": &"Button",
 }
 
 var settings: Resource = preload("res://resources/audio_settings.tres")
@@ -15,9 +22,10 @@ func _ready() -> void:
 	apply_settings()
 
 func apply_settings() -> void:
-	set_category_volume(&"move", float(settings.get("move_db")))
-	set_category_volume(&"die", float(settings.get("die_db")))
-	set_category_volume(&"animal", float(settings.get("animal_db")))
+	for category: StringName in CATEGORY_BUSES:
+		var value: Variant = settings.get(String(category) + "_db")
+		if value != null:
+			set_category_volume(category, float(value))
 
 func set_category_volume(category: StringName, volume_db: float) -> void:
 	var bus_name: StringName = CATEGORY_BUSES.get(category, category)

@@ -74,12 +74,18 @@ func _run() -> void:
 		monster.visual_lifetime = 5.0
 	await frames(30)
 	var field_root: Node2D = level.get_node("SoundFields")
+	var visual_side: float = float(pair_monster.get("visual_side_cells")) * 16.0
 	var red_pulses := 0
 	for child in field_root.get_children():
 		if child is SoundField and child.level == 0 and not child.safe_for_player \
-				and absf(child.side_length - 48.0) < 0.01:
+				and absf(child.side_length - visual_side) < 0.01:
 			red_pulses += 1
 	check(red_pulses >= 3, "Monsters emit the triple red visual pulses")
+	var red_count := _count_bursts(field_root, pair_monster.visual_color)
+	pair_monster._spawn_visual_burst()
+	check(_count_bursts(field_root, pair_monster.visual_color) - red_count \
+		== int(pair_monster.get("_offsets").size()),
+		"Monster visual bursts stay red without player effects")
 	var hitbox_ok := true
 	for child in pair_monster.get_children():
 		if child is CollisionShape2D and child.shape is RectangleShape2D:
@@ -166,6 +172,11 @@ func _run() -> void:
 	await frames(8)
 	check(pair_monster.global_position.distance_to(push_start) > 3.0,
 		"Level-1 wave pushes the monster away")
+	var blue_count := _count_bursts(field_root, pair_monster.visual_push_color)
+	pair_monster._spawn_visual_burst()
+	check(_count_bursts(field_root, pair_monster.visual_push_color) - blue_count \
+		== int(pair_monster.get("_offsets").size()),
+		"Knocked-back monster visual bursts turn blue")
 
 	# 7. lv2 波把怪定住（不推走）。
 	level.reset_to_checkpoint()
@@ -181,6 +192,11 @@ func _run() -> void:
 	await frames(30)
 	check(single_a.global_position.distance_to(frozen_star) < 0.5,
 		"Level-2 wave freezes the monster without pushing it")
+	var yellow_count := _count_bursts(field_root, single_a.visual_freeze_color)
+	single_a._spawn_visual_burst()
+	check(_count_bursts(field_root, single_a.visual_freeze_color) - yellow_count \
+		== int(single_a.get("_offsets").size()),
+		"Frozen monster visual bursts turn yellow")
 	bait.queue_free()
 	await frames(3)
 
@@ -225,6 +241,19 @@ func _run() -> void:
 	prey.global_position = single_a.global_position
 	await frames(3)
 	check(not prey.is_alive() and not prey.visible, "Monster eats an animal it touches")
+	check(single_a._pick_target() != prey, "Monster no longer targets a consumed animal")
+	var park_position: Vector2 = single_a.global_position
+	await frames(10)
+	check(single_a.global_position.distance_to(park_position) < 0.5,
+		"Monster stops instead of parking on the corpse")
+	var switch_target: Animal = load("res://scenes/actors/animal.tscn").instantiate()
+	level.add_child(switch_target)
+	switch_target.global_position = single_a.global_position + Vector2(64, 0)
+	await frames(2)
+	check(single_a._pick_target() == switch_target,
+		"Monster switches to a live animal after its target dies")
+	switch_target.queue_free()
+	await frames(2)
 	level.reset_to_checkpoint()
 	await frames(3)
 	check(prey.is_alive(), "R revives an eaten animal")
@@ -233,3 +262,14 @@ func _run() -> void:
 	level.noise.clear_all()
 	print("\nSpike checks: ", "ALL PASSED" if failures.is_empty() else "%d FAILED" % failures.size())
 	quit(0 if failures.is_empty() else 1)
+
+func _count_bursts(root: Node2D, col: Color) -> int:
+	var count := 0
+	for child in root.get_children():
+		var field := child as SoundField
+		if field != null and field.level == 0 and not field.safe_for_player \
+				and is_equal_approx(field.color.r, col.r) \
+				and is_equal_approx(field.color.g, col.g) \
+				and is_equal_approx(field.color.b, col.b):
+			count += 1
+	return count
