@@ -80,6 +80,25 @@ func _run() -> void:
 		var move_db: float = float(settings_obj.get("move_db")) if settings_obj != null else 0.0
 		check(absf(AudioServer.get_bus_volume_db(move_bus) - move_db) < 0.1,
 			"Move bus volume follows AudioSettings")
+	# 动物叫声随玩家曼哈顿距离衰减，8 格（128px）为最远可听距离。
+	animal.global_position = Vector2.ZERO
+	player.global_position = Vector2.ZERO
+	animal._on_visible_on_screen_notifier_2d_screen_entered()
+	await rendered_frames()
+	check(audio.playing and absf(audio.volume_db) < 0.1,
+		"Animal call is full volume at the player's position")
+	player.global_position = Vector2(32, 32)
+	await rendered_frames()
+	var expected_half_db := linear_to_db(0.5)
+	check(absf(audio.volume_db - expected_half_db) < 0.6,
+		"Animal call volume follows Manhattan distance")
+	player.global_position = Vector2(64, 64)
+	await rendered_frames()
+	check(not audio.playing, "Animal call is silent at Manhattan distance 8 tiles")
+	player.global_position = Vector2.ZERO
+	await rendered_frames()
+	check(absf(audio.volume_db) < 0.1, "Animal call volume returns at the player's position")
+
 	player._play_move_sound()
 	check(player.move_audio.playing, "Player movement sound plays")
 	player.move_audio.stop()

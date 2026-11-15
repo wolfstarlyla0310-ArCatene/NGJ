@@ -1,83 +1,109 @@
 @tool
 class_name Checkpoint
 extends Area2D
-## 存档点：记录重生坐标，并每 `field_interval` 秒发出一个白色安全声场。
-## 进房时由 WorldMap 自动绑定，碰到时也会更新。
+## 存档点：记录重生坐标，并维持一个持续存在的白色安全声场。
+## 未激活显示半透明闭旗；激活后换成开旗。
 
 signal touched(checkpoint: Checkpoint)
 
 const TILE_SIZE := 16.0
 const FIELD_EXPAND_DURATION := 0.5
+const FLAG_CLOSE := preload("res://assets/flag_close.png")
+const FLAG_OPEN := preload("res://assets/flag_open.png")
+const IDLE_ALPHA := 0.8
 
 @export var respawn_offset := Vector2.ZERO
-@export var idle_color := Color(0.45, 0.5, 0.55, 0.9)
-@export var active_color := Color(1.0, 1.0, 1.0, 1.0)
 
 @export_group("声场")
-## 是否周期性发射声场（测试/调参可关闭）。
+## 是否启用安全声场（测试/调参可关闭）。
 @export var fields_enabled := true
 ## 声场边长（格）；5 格 = 80px。
 @export var field_side_cells := 5.0
-## 发射间隔（秒）；与动物静止声波一致，每秒一次。
-@export var field_interval := 1.0
-## 单个声场寿命（秒）；持续到下一次发射，保持安全区域连续生效。
-@export var field_lifetime := 1.0
+## 持续声场的视觉渐隐渐显（只改透明度，不改变安全/隐藏噪音等实际作用）。
+@export var field_fade_enabled := true
+## 一次渐隐渐显周期（秒）。
+@export var field_fade_seconds := 1.2
+## 最暗时的视觉不透明度。
+@export_range(0.05, 1.0, 0.05) var field_min_alpha := 0.35
 
 var _active := false
-var _emit_elapsed := 0.0
+## 玩家是否接触/绑定过这个存档点；一旦激活就永久保持声场。
+var _field_activated := false
 var _sound_fields: Node2D = null
 var _current_field: SoundField = null
+var _field_fade_elapsed := 0.0
+
+@onready var _sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
 
 func _ready() -> void:
 	collision_layer = 0
 	collision_mask = 2
 	body_entered.connect(_on_body_entered)
-	_emit_elapsed = 0.0
-	queue_redraw()
+	_refresh_visual()
 
-## 地图加载、房间刷新或复活时同步发出第一道安全声波，并重新计算周期。
+## 玩家激活后，地图加载/房间刷新/复活时确保安全声场存在（幂等）。
 func restart_wave() -> void:
-	_emit_elapsed = 0.0
-	if Engine.is_editor_hint() or not fields_enabled:
+	if Engine.is_editor_hint() or not _field_activated:
 		return
-	_spawn_field()
+	_ensure_field()
 
 func _physics_process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
 	if not fields_enabled:
-		_emit_elapsed = 0.0
+		_clear_field()
 		return
-	# 独立场景或外部清场后也立即恢复，不能等到旧计时器走完。
-	if not is_instance_valid(_current_field) or _current_field.is_queued_for_deletion():
-		restart_wave()
-		return
-	_emit_elapsed += delta
-	if _emit_elapsed < field_interval:
-		return
-	_emit_elapsed = fmod(_emit_elapsed, maxf(field_interval, 0.001))
-	_spawn_field()
+	if _field_activated:
+		_ensure_field()
+	_update_field_visual(delta)
 
-func _spawn_field() -> void:
+## 只改声场节点的 modulate.a（渲染透明度），安全范围/隐藏噪音等判定完全不变。
+func _update_field_visual(delta: float) -> void:
+	if not is_instance_valid(_current_field) or _current_field.is_queued_for_deletion():
+		_field_fade_elapsed = 0.0
+		return
+	if not field_fade_enabled:
+		_current_field.modulate.a = 1.0
+		return
+	_field_fade_elapsed += delta
+	var phase := sin(_field_fade_elapsed * TAU / maxf(field_fade_seconds, 0.001))
+	_current_field.modulate.a = lerpf(field_min_alpha, 1.0, 0.5 + 0.5 * phase)
+
+func _ensure_field() -> void:
+	if Engine.is_editor_hint() or not _field_activated:
+		return
+	if not fields_enabled:
+		_clear_field()
+		return
+	if is_instance_valid(_current_field) and not _current_field.is_queued_for_deletion():
+		return
+	_current_field = null
 	if _sound_fields == null or not is_instance_valid(_sound_fields):
 		_sound_fields = get_tree().get_first_node_in_group("sound_fields")
 	if _sound_fields == null:
 		return
-	# 新一轮替换上一轮，避免计时边界或参数热更新时出现多层方框。
-	if is_instance_valid(_current_field) and not _current_field.is_queued_for_deletion():
-		_current_field.queue_free()
 	var field := SoundField.new()
 	field.side_length = field_side_cells * TILE_SIZE
-	field.lifetime = field_lifetime
+	field.lifetime = INF
 	field.expand_duration = FIELD_EXPAND_DURATION
 	field.color = Color.WHITE
 	field.lethal = false
 	field.safe_for_player = true
 	field.level = 0
 	field.emitter = null  # 门会跳过 emitter 为空的白色声场
+	field.persistent = true
 	_current_field = field
 	_sound_fields.add_child(field)
 	field.global_position = SoundField.snap_origin_to_grid(global_position, field.side_length)
+	# 从最暗开始，随后由 _update_field_visual() 渐显。
+	_field_fade_elapsed = 0.0
+	field.modulate.a = field_min_alpha if field_fade_enabled else 1.0
+
+func _clear_field() -> void:
+	if is_instance_valid(_current_field) and not _current_field.is_queued_for_deletion():
+		_current_field.queue_free()
+	_current_field = null
+	_field_fade_elapsed = 0.0
 
 func _on_body_entered(body: Node2D) -> void:
 	if body is EchoPlayer:
@@ -87,7 +113,11 @@ func set_active(value: bool) -> void:
 	if value == _active:
 		return
 	_active = value
-	queue_redraw()
+	_refresh_visual()
+	if value:
+		# 玩家激活：发出一次安全场，之后一直保持（换绑/离开房间都不删除）。
+		_field_activated = true
+		_ensure_field()
 
 func is_active() -> bool:
 	return _active
@@ -95,7 +125,12 @@ func is_active() -> bool:
 func respawn_position() -> Vector2:
 	return global_position + respawn_offset
 
-func _draw() -> void:
-	var color := active_color if _active else idle_color
-	draw_rect(Rect2(-8, -8, 16, 16), color, false, 2.0)
-	draw_rect(Rect2(-3, -3, 6, 6), color, true)
+func _refresh_visual() -> void:
+	if _sprite == null:
+		return
+	if _active:
+		_sprite.texture = FLAG_OPEN
+		_sprite.modulate = Color.WHITE
+	else:
+		_sprite.texture = FLAG_CLOSE
+		_sprite.modulate = Color(1.0, 1.0, 1.0, IDLE_ALPHA)

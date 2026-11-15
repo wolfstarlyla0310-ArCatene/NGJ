@@ -15,8 +15,11 @@ enum ClimbPhase { NONE, TURN_UP, RISE, TURN_FORWARD, MOVE_ONTO }
 
 ## 动物叫声之间的间隔，单位：秒
 @export var animal_sound_interval: float = 1.0
+## 玩家与动物的曼哈顿距离超过这么多格时听不到叫声。
+@export var audible_range_cells: float = 8.0
 
 var _animal_sound_elapsed: float = 0.0
+var _player: EchoPlayer = null
 @export var move_speed := 90.0
 @export var gravity := 1500.0
 @export var detection_margin := 16.0
@@ -326,6 +329,12 @@ func rebase_home() -> void:
 	_home_position = global_position
 	_home_captured = true
 
+## 世界层重定向刷新点（如 Room3 → Room4）；只改记录，不移动动物本体。
+## 必须标记已捕获，避免延迟的 _capture_home 覆盖它。
+func set_home(point: Vector2) -> void:
+	_home_position = point
+	_home_captured = true
+
 ## R / 死亡重置时回到出生位置并清空所有临时状态。
 func reset_home() -> void:
 	_stop_animal_sound()
@@ -396,6 +405,9 @@ func _process(delta: float) -> void:
 	if not _screen_notifier.is_on_screen():
 		_stop_animal_sound()
 		return
+	if not _update_distance_volume():
+		_stop_animal_sound()
+		return
 
 	if _animal_audio.playing:
 		_animal_sound_elapsed = 0.0
@@ -407,3 +419,22 @@ func _process(delta: float) -> void:
 		_animal_sound_elapsed = 0.0
 		if _animal_audio.stream != null:
 			_animal_audio.play()
+
+## 按玩家与动物的曼哈顿距离设置音量；返回 false 表示超出可听范围。
+func _update_distance_volume() -> bool:
+	if _animal_audio == null:
+		return true
+	if _player == null or not is_instance_valid(_player):
+		_player = get_tree().get_first_node_in_group("player") as EchoPlayer
+	if _player == null:
+		# 独立测试场景没有玩家：保持原音量。
+		_animal_audio.volume_db = 0.0
+		return true
+	var distance_px := absf(global_position.x - _player.global_position.x) \
+		+ absf(global_position.y - _player.global_position.y)
+	var distance_cells := distance_px / TILE_SIZE
+	if distance_cells >= maxf(audible_range_cells, 0.001):
+		return false
+	var t := 1.0 - distance_cells / maxf(audible_range_cells, 0.001)
+	_animal_audio.volume_db = maxf(linear_to_db(t), -80.0)
+	return true

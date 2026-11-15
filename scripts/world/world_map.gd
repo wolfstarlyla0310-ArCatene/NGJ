@@ -6,6 +6,16 @@ signal checkpoint_changed(room: Room, anchor: Vector2)
 
 const RESET_ACTION := &"restart"
 
+## 一起加载/刷新的房间组（按 Room 节点名）。
+const LINKED_ROOM_GROUPS := [
+	[&"Room3", &"Room4", &"Room5"],
+	[&"Room6", &"Room8"],
+]
+## 动物刷新点落在这些房间时，改记到目标房间（玩家在目标房间的存档点复活）。
+const ANIMAL_HOME_ROOM_REDIRECT := {&"Room3": &"Room4"}
+## 改记后的刷新点相对目标房间存档点复活位置的偏移。
+const ANIMAL_REDIRECT_OFFSET := Vector2(48, 0)
+
 ## 玩家接触噪音格且不在安全声场内时，多久后死亡（秒）。检查器可调。
 @export var noise_grace_seconds := 0.3
 
@@ -77,6 +87,7 @@ func _physics_process(delta: float) -> void:
 		return
 	var player_rect := _player_rect()
 	if _touching_lethal_field(player_rect):
+		player.set_danger(0.0)
 		_die()
 		return
 	noise.sync_visibility(_active_sound_field_rects())
@@ -84,8 +95,10 @@ func _physics_process(delta: float) -> void:
 	# 身体任意部分碰到噪音就开始冷却；中心在安全声场内时重置冷却。
 	if not noise.touches_rect(player_rect) or _inside_active_sound_field(center):
 		_grace_remaining = noise_grace_seconds
+		player.set_danger(0.0)
 		return
 	_grace_remaining = maxf(0.0, _grace_remaining - delta)
+	player.set_danger(1.0 - _grace_remaining / maxf(noise_grace_seconds, 0.001))
 	if _grace_remaining <= 0.0:
 		_die()
 
@@ -207,10 +220,17 @@ func reset_to_checkpoint() -> void:
 			field.queue_free()
 	player.reset_to(_checkpoint_position)
 	_culled_room = null
+	for node in get_tree().get_nodes_in_group("animal"):
+		var animal := node as Animal
+		if animal == null or not is_instance_valid(animal):
+			continue
+		var home_room := _room_of(animal.home_position())
+		var target := _redirected_home_room(home_room)
+		if target != null and target != home_room:
+			animal.set_home(_animal_record_point_in(target))
+		animal.reset_home()
+	# 必须在动物归位之后：让被传送的动物按新位置获得正确的 process/visible。
 	_update_room_culling(true)
-	for animal in get_tree().get_nodes_in_group("animal"):
-		if animal.has_method("reset_home"):
-			animal.call("reset_home")
 	_grace_remaining = noise_grace_seconds
 	if room != null:
 		for door in get_tree().get_nodes_in_group("door"):
@@ -264,6 +284,7 @@ func _die() -> void:
 	player.controls_enabled = false
 	player.velocity = Vector2.ZERO
 	player.visible = false
+	player.set_danger(0.0)
 	_spawn_death_field(player.global_position)
 
 func is_dead() -> bool:
@@ -312,15 +333,12 @@ func _update_room_culling(force := false) -> void:
 			continue
 		var node_room := _room_of(node_2d.global_position)
 		var active := node_room == null or active_rooms.has(node_room)
-		var was_active := node.process_mode != Node.PROCESS_MODE_DISABLED
 		node.process_mode = Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
 		if node is CanvasItem:
 			var alive := not (node is Animal) or (node as Animal).is_alive()
 			(node as CanvasItem).visible = active and alive
 		if node is Checkpoint:
 			(node as Checkpoint).set_deferred("monitoring", active)
-			if active and not was_active:
-				(node as Checkpoint).restart_wave()
 		if node.is_in_group("collectible") or node.is_in_group("spike_monster"):
 			var area := node as Area2D
 			if area != null:
@@ -337,27 +355,66 @@ func _collect_managed_nodes(node: Node, out: Array[Node]) -> void:
 
 ## 玩家进入某房间时：已经在该房间里的动物，把刷新点改到这个房间。
 ## 用于“把 Room11 的动物赶进 Room12 后，刷新时动物留在 Room12”。
+## 例外：Room3 的刷新点一律改记到 Room4 存档点旁（玩家在 Room4 复活，避免看不到）。
 func _rebase_animals_in_room(room: Room) -> void:
 	if room == null:
 		return
+	var target := _redirected_home_room(room)
 	for node in get_tree().get_nodes_in_group("animal"):
 		var animal := node as Animal
 		if animal == null or not is_instance_valid(animal):
 			continue
 		if _room_of(animal.global_position) != room:
 			continue
-		if _room_of(animal.home_position()) != room:
+		if target != room:
+			# Room3 的刷新点一律改到 Room4 存档点旁；只改记录，不移动本体。
+			animal.set_home(_animal_record_point_in(target))
+		elif _room_of(animal.home_position()) != room:
 			animal.rebase_home()
 
-## 某个房间 + 联动房间一起加载/刷新。
+func _room_node(room_name: StringName) -> Room:
+	if rooms_root == null:
+		return null
+	return rooms_root.get_node_or_null(NodePath(String(room_name))) as Room
+
+func _linked_room_group(room: Room) -> Array:
+	if room == null:
+		return []
+	for group in LINKED_ROOM_GROUPS:
+		if group.has(room.name):
+			return group
+	return []
+
+## 动物刷新点所在房间的重定向目标；没有配置时返回原房间。
+func _redirected_home_room(room: Room) -> Room:
+	if room == null:
+		return null
+	if not ANIMAL_HOME_ROOM_REDIRECT.has(room.name):
+		return room
+	var target := _room_node(StringName(str(ANIMAL_HOME_ROOM_REDIRECT[room.name])))
+	return target if target != null else room
+
+## 目标房间里的动物记录点：存档点旁；没有存档点时退回房间中心。
+func _animal_record_point_in(room: Room) -> Vector2:
+	if room == null:
+		return Vector2.ZERO
+	var checkpoint := _checkpoint_in_room(room)
+	if checkpoint != null:
+		return checkpoint.respawn_position() + ANIMAL_REDIRECT_OFFSET
+	return room.get_rect().get_center()
+
+## 某个房间所在加载组（自身 + 联动房间）一起加载/刷新。
 func _active_rooms(room: Room) -> Array[Room]:
 	var rooms: Array[Room] = []
 	if room == null:
 		return rooms
 	rooms.append(room)
-	var linked := _linked_room_for(room)
-	if linked != null:
-		rooms.append(linked)
+	for member_name in _linked_room_group(room):
+		if member_name == room.name:
+			continue
+		var member := _room_node(StringName(member_name))
+		if member != null and not rooms.has(member):
+			rooms.append(member)
 	return rooms
 
 func _same_room_set(a: Array[Room], b: Array[Room]) -> bool:
@@ -393,6 +450,7 @@ func _refresh_room(room: Room) -> void:
 	_restart_checkpoint_waves(room)
 
 func _reset_animals_in_room(room: Room) -> void:
+	var record_target := _redirected_home_room(room)
 	for node in get_tree().get_nodes_in_group("animal"):
 		var animal := node as Animal
 		if animal == null or not is_instance_valid(animal):
@@ -400,7 +458,11 @@ func _reset_animals_in_room(room: Room) -> void:
 		# 只刷新“还留在这个房间”的动物；被驱赶去别的房间的留给新房间 rebase。
 		if _room_of(animal.home_position()) == room \
 				and _room_of(animal.global_position) == room:
-			animal.reset_home()
+			if record_target != room:
+				# 刷新点不再留在被重定向的房间：只改记录，不传送。
+				animal.set_home(_animal_record_point_in(record_target))
+			else:
+				animal.reset_home()
 
 func _reset_monsters_in_room(room: Room) -> void:
 	for node in get_tree().get_nodes_in_group("spike_monster"):
@@ -408,24 +470,6 @@ func _reset_monsters_in_room(room: Room) -> void:
 			continue
 		if _room_of(node.call("home_position")) == room:
 			node.call("reset_home")
-
-## Room4 与 Room5 联动，两个房间一起加载。
-func _linked_room_for(room: Room) -> Room:
-	if room == null:
-		return null
-	var pair := ""
-	match room.name:
-		&"Room4":
-			pair = "Room5"
-		&"Room5":
-			pair = "Room4"
-		&"Room6":
-			pair = "Room8"
-		&"Room8":
-			pair = "Room6"
-	if pair.is_empty():
-		return null
-	return get_node_or_null("Rooms/" + pair) as Room
 
 func _first_room() -> Room:
 	var rooms := get_rooms()

@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/world/button.gd" id="1_script"]
 [ext_resource type="Texture2D" path="res://assets/tiles/buttom.png" id="2_texture"]
+[ext_resource type="AudioStream" uid="uid://de7doawludec1" path="res://assets/sound/BottonClick/soundreality-button-202966.mp3" id="3_button_sound"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_button"]
 size = Vector2(16, 16)
@@ -22,3 +23,6 @@ vframes = 2
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_button")
+
+[node name="BottonSound" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("3_button_sound")

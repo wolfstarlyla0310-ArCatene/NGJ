@@ -45,6 +45,15 @@ const CEILING_PROBE_PIXELS: float = 3.0
 @onready var blue_drop_audio: AudioStreamPlayer = get_node_or_null("BlueDropSound") as AudioStreamPlayer
 @onready var yellow_drop_audio: AudioStreamPlayer = get_node_or_null("YellowDropSound") as AudioStreamPlayer
 @onready var pickup_audio: AudioStreamPlayer = get_node_or_null("PickUpSound") as AudioStreamPlayer
+@onready var _sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
+
+## 危险倒计时渐红（0 = 正常，1 = 最红）；只改贴图颜色，不影响碰撞/音效。
+func set_danger(amount: float) -> void:
+	if _sprite == null:
+		return
+	var t := clampf(amount, 0.0, 1.0)
+	_sprite.modulate = Color.WHITE.lerp(Color(1.0, 0.3, 0.3, 1.0), t)
+
 
 # ==============================
 # 玩家状态
@@ -74,6 +83,7 @@ var _jump_start_against_ceiling: bool = false
 # ==============================
 
 func _ready() -> void:
+	add_to_group("player")
 	_fall_apex_y = global_position.y
 	_jump_start_against_ceiling = false
 
@@ -442,6 +452,7 @@ func reset_to(point: Vector2) -> void:
 
 	_fall_apex_y = point.y
 	_jump_start_against_ceiling = false
+	set_danger(0.0)
 
 
 # ==============================

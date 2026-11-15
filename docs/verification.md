@@ -1,5 +1,34 @@
 # 验证记录
 
+2026-11-15（动物音效距离衰减 / 存档点激活后发出持续场）
+
+- `player.gd`：`_ready()` 加入 `player` 组，供动物查找主控玩家。
+- `animal.gd`：新增 `audible_range_cells`（默认 8 格）；`_process()` 在「在屏」判断后按玩家与动物的**曼哈顿距离**设置 `AnimalSound.volume_db`：距离 0 → 0 dB，线性衰减，≥8 格（128px）返回 false → 停止播放。无玩家场景回退到 0 dB。
+- `checkpoint.gd`：删除 `_field_active` / `set_field_active()`，新增 `_field_activated`；只有 `set_active(true)`（玩家接触绑定）时才 `_ensure_field()` 发出一次 80px 持续场，之后 `persistent` 保持；`restart_wave()` / `_physics_process()` 只维护已激活存档点的场；未激活存档点没有声场；`fields_enabled=false` 仍主动清场。`world_map.gd` 房间裁剪不再调用 `set_field_active()`（离开房间不删除已激活的场，只切换 monitoring）。
+- 测试：`audio_node_checks` 20 → **24**（重合 0 dB、曼哈顿 4 格 ≈ -6 dB、8 格静音、回到 0 恢复）；`big_map_checks` 72 → **73**（接触激活）；`checkpoint_wave_checks` 22 → **23** 重写（未激活无场、接触后一次持续、死亡重开、离开房间保持）。
+- 本机结果：`audio_node_checks` **24 全过**（窗口运行）；`big_map` **73 全过**、`checkpoint_wave` **23 全过**；`door_animal` / `button_door` / `trigger` / `barrier` / `collectible` / `spike` / `keyboard` 全过。`animal_step_sound_checks` 仍有 4 项既存失败，与本改动无关。
+
+2026-11-15（物品脉冲 / 危险渐红 / 旗子贴图 / 相机满屏 / 存档点持续声场）
+
+- `collectible.gd`：新增纯视觉脉冲（默认 2 格 / 32px、1.2 秒间隔、0.6 秒寿命、0.45 秒扩散、白色 alpha 0.4）。脉冲作为收集品的**子节点**创建，不进 `SoundFields` 容器、不进 `sound_fields` 组，且 `level=0 / lethal=false / safe_for_player=false / emitter=null`；不会隐藏噪音、触发屏障/门/按钮、推动动物或刺怪。收集品被房间裁剪时脉冲随父节点暂停/隐藏。
+- `player.gd` + `world_map.gd`：新增 `EchoPlayer.set_danger(amount)`（Sprite2D.modulate 白→红）；噪音冷却递减期间按 `1 - grace/noise_grace_seconds` 渐红，离开噪音/进入安全场/致命场死亡/`reset_to()`（含 R 复活）立即清零。
+- `checkpoint.gd` + `checkpoint.tscn`：删除 `idle_color` / `active_color` 与 `_draw()`，新增 `Sprite2D`：未激活 `flag_close.png` + alpha 0.8，激活 `flag_open.png` + alpha 1.0；`set_active()` / `_ready()` 刷新。
+- `room_camera_controller.gd`：`fit_margin` 默认 0.08 → **0**；`_fit_zoom()` 不再留白。480×288 房间在 1280×720 下 zoom = 2.5，竖向严格铺满，横向因 5:3 vs 16:9 各留 40px。
+- `checkpoint.gd` + `world_map.gd`：存档点声场由每秒脉冲改为**一个持续场**（`lifetime = INF`、`persistent = true`、`expand_duration = 0.5`、5 格 / 80px、白色 lv0、`emitter=null`）。删除 `field_interval` / `field_lifetime` / `_emit_elapsed`；`restart_wave()` 改为幂等 ensure；新增 `set_field_active()`，由 `_update_room_culling()` 在进入/离开房间组时创建/删除（场挂在全局容器下，不继承存档点的 `PROCESS_MODE_DISABLED`）。`fields_enabled=false` 会主动清场。
+- 存档点持续场增加**渐隐渐显**视觉：`checkpoint.gd` 新增 `field_fade_enabled` / `field_fade_seconds`（默认 1.2 秒）/ `field_min_alpha`（默认 0.35），在 `_physics_process` 里只改声场节点的 `modulate.a`（正弦循环）。安全范围、噪音隐藏、屏障显形等判定完全不变；新场从最暗开始渐显。
+- 测试：`big_map_checks` 61 → **72**（相机无留白、持续场/旗子、持续场渐隐渐显且不影响判定、危险渐红与 R 清零）；`collectible_checks` 10 → **17**（脉冲参数/不参与判定/按间隔重复）；`checkpoint_wave_checks` 重写为 **22 项**（持续场唯一性、3 秒不替换、死亡重开同步安全、`fields_enabled` 清场重建、房间裁剪删除重建）。`spike_checks` 的「默认 2 秒间隔」改为读脚本默认值（怪物仍跟随场景 `Spikes` 节点配置），避免用户把节点值调成 0.2 秒时误报。
+- 本机 headless 结果：`big_map` **72 全过**、`collectible` **17 全过**、`checkpoint_wave` **22 全过**、`spike` / `trigger` / `barrier` / `button_door` / `door_animal` / `keyboard` 全过。`animal_step_sound_checks` 仍有 4 项既存失败（爬台阶 2 项、普通 lv0 声场不按按钮 2 项），该套件使用独立物理场景、不经过本次改动的代码路径；未处理。`audio_node_checks` 需要窗口，未运行。
+- 注意：工作区场景里用户设置了 `Start Room = Room11`、`monster_visual_cycle_interval = 0.2`，测试已按「动态读取起始房间存档点」和「脚本默认值」兼容这些改动。
+
+2026-11-15（Room3+4+5 联动 / Room3 动物刷新点改记 Room4）
+
+- `world_map.gd`：联动从一对一配对改为 `LINKED_ROOM_GROUPS`（**Room3+Room4+Room5**、Room6+Room8）；`_active_rooms()` 返回整个组，删除 `_linked_room_for()`；`_same_room_set()` / `_refresh_rooms_left()` 继续支持任意大小组，组内移动不刷新、离开组时整组刷新。
+- 新增 `ANIMAL_HOME_ROOM_REDIRECT = {Room3: Room4}` 与 `ANIMAL_REDIRECT_OFFSET = (48, 0)`：`_rebase_animals_in_room()` 在玩家进入 Room3 时，把该房间动物的刷新点改为 Room4 存档点右侧 48px（`_animal_record_point_in()` 复用 `_checkpoint_in_room()` / `Checkpoint.respawn_position()`）。**只改记录**：动物在 Room3 时保持原位，离开房间组不会拉回，按 R / 死亡重置才回到 Room4；`_reset_animals_in_room()` 对仍记录在 Room3 的动物做同样兜底。
+- `reset_to_checkpoint()`：先重定向刷新点并 `reset_home()`，再执行 `_update_room_culling(true)`，避免被传送的动物沿用旧的隐藏/停处理状态。
+- `animal.gd`：新增 `set_home(point)`，同时置 `_home_captured`，避免延迟的 `_capture_home()` 覆盖重定向记录。
+- 测试：`big_map_checks` 54 → **61**（Room3 随 Room4/5 一起加载、Room3/4/5 玻璃一起刷新、Room3 动物改记 Room4、记录不移动本体、离开不拉回、R 后在 Room4 可见）。本机 headless：`big_map_checks` **61 全部通过**；`door_animal_checks` 全部通过。
+- 另有两个与本次代码路径无关的失败，未处理：`spike_checks` 的「默认 2 秒间隔」断言（场景里未提交的 `monster_visual_cycle_interval = 0.5` 覆盖了默认值，怪物实际使用 0.5 秒）；`checkpoint_wave_checks` 的「开局保护出生点」断言。
+
 2026-11-15（动物 R 复活 / 玩家死亡隐藏 / 刺怪红波视觉 / 跨房间刷新）
 
 - `animal.gd`：被怪/门吃掉改为 `consume()`（隐藏、停止处理、保留节点）；`reset_home()` 复活并恢复可见；新增 `is_alive()`。陷阱门与刺怪改为调用 `consume()`，不再 `queue_free`。

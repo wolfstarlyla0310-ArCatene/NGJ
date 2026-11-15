@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://bawjpxul8w6li" path="res://scripts/noise_field.gd" id="7_noise"]
 [ext_resource type="TileSet" uid="uid://hpebaasxf5vw" path="res://resources/noise_tileset.tres" id="8_noise_tiles"]
 [ext_resource type="TileSet" uid="uid://bikiyvaxuwiks" path="res://resources/whitebox_tileset.tres" id="10_whitebox"]
+[ext_resource type="AudioStream" uid="uid://cr8nrrq5nm15c" path="res://assets/sound/GlassBreaking/dragon-studio-glass-breaking-504033.mp3" id="11_glass"]
 
 [node name="WaveJumpLab" type="Node2D" unique_id=40131216]
 script = ExtResource("1_lab")
@@ -21,6 +22,9 @@ tile_set = ExtResource("10_whitebox")
 [node name="Breakables" type="Node2D" parent="." unique_id=367052701]
 z_index = 1
 script = ExtResource("4_breakables")
+
+[node name="GlassBreakingSound" type="AudioStreamPlayer" parent="Breakables"]
+stream = ExtResource("11_glass")
 
 [node name="Lv1" type="TileMapLayer" parent="Breakables" unique_id=809784310]
 tile_map_data = PackedByteArray("AAAiACAAAAADAAUAAAAjACAAAAAFAAUAAAA=")

@@ -24,8 +24,8 @@ signal room_exited(room: Room)
 @export var transition_ease: Tween.EaseType = Tween.EASE_IN_OUT
 ## 边缘余量（像素）：玩家要「深入」新房间这么多像素才真的切，防止贴着门槛来回抖动。
 @export var switch_margin := 4.0
-## 自动缩放的四周留白比例（0 = 房间铺满屏幕；0.08 ≈ 每边留 4%）。
-@export_range(0.0, 0.4, 0.01) var fit_margin := 0.08
+## 自动缩放的四周留白比例（0 = 房间在受限方向上严格铺满屏幕）。
+@export_range(0.0, 0.4, 0.01) var fit_margin := 0.0
 ## 自动缩放的下限（越小看得越广）；只用于极端窗口保护，平时不会碰到。
 @export var min_zoom := 1.0
 ## 自动缩放的上限（越大放得越大）；只用于极小房间保护，平时不会碰到。
