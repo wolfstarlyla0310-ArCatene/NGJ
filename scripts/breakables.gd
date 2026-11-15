@@ -6,6 +6,7 @@ const TILE_SIZE := 16
 
 @onready var lv1: TileMapLayer = $Lv1
 @onready var lv2: TileMapLayer = $Lv2
+@onready var glass_sound: AudioStreamPlayer = get_node_or_null("GlassBreakingSound") as AudioStreamPlayer
 
 var _baseline: Dictionary = {1: {}, 2: {}}
 var _bodies: Dictionary = {1: {}, 2: {}}
@@ -28,26 +29,43 @@ func refresh() -> void:
 		_baseline[wave_level] = snapshot
 	_spawn_all_bodies()
 
+
 func break_in_rect(area: Rect2, wave_level: int) -> void:
 	if wave_level < 1 or wave_level > 2:
 		return
+
 	var layer := _layer(wave_level)
 	var bodies: Dictionary = _bodies[wave_level]
 	var broke_any := false
+
 	for cell in layer.get_used_cells():
 		var body: StaticBody2D = bodies.get(cell)
+
 		if not is_instance_valid(body):
 			continue
-		var cell_rect := Rect2(body.global_position - Vector2(TILE_SIZE, TILE_SIZE) * 0.5, Vector2(TILE_SIZE, TILE_SIZE))
+
+		var cell_rect := Rect2(
+			body.global_position - Vector2(TILE_SIZE, TILE_SIZE) * 0.5,
+			Vector2(TILE_SIZE, TILE_SIZE)
+		)
+
 		if not area.intersects(cell_rect, true):
 			continue
+
+		# 玻璃真正碎裂
 		layer.erase_cell(cell)
+
 		body.collision_layer = 0
 		body.queue_free()
 		bodies.erase(cell)
+
 		broke_any = true
+
+	# 至少有一块玻璃碎裂，才播放音效
 	if broke_any:
+		_play_glass_breaking_sound()
 		_relink(layer)
+
 
 func reset() -> void:
 	_clear_bodies()
@@ -124,3 +142,9 @@ func _spawn_all_bodies() -> void:
 			add_child(body)
 			body.global_position = layer.to_global(layer.map_to_local(cell))
 			bodies[cell] = body
+
+func _play_glass_breaking_sound() -> void:
+	if glass_sound == null or glass_sound.stream == null:
+		return
+
+	glass_sound.play()

@@ -27,7 +27,7 @@ var _held := false
 var _latched := false
 
 @onready var _sprite: Sprite2D = get_node_or_null(SPRITE_NAME) as Sprite2D
-
+@onready var _button_sound: AudioStreamPlayer2D = get_node_or_null("BottonSound") as AudioStreamPlayer2D
 func _ready() -> void:
 	add_to_group("door_button")
 	_sound_fields = get_tree().get_first_node_in_group("sound_fields")
@@ -36,14 +36,24 @@ func _ready() -> void:
 
 func _physics_process(_delta: float) -> void:
 	var held := _is_triggering_field_on_me()
+
 	if held == _held:
 		return
+
+	var was_pressed := is_pressed()
 	_held = held
-	# 一次性按钮：首次被声场覆盖就锁死，之后不再回弹。
+
 	if mode == Mode.ONE_SHOT and held:
 		_latched = true
+
 	_refresh_visual()
+
+	if not was_pressed and is_pressed():
+		_play_button_sound()
+
 	pressed_changed.emit(self)
+	
+
 
 func is_held() -> bool:
 	return _held
@@ -98,3 +108,12 @@ func _is_triggering_field_on_me() -> bool:
 		if field.level == 1 and field.get_rect().intersects(trigger_rect):
 			return true
 	return false
+	
+func _play_button_sound() -> void:
+	if _button_sound == null:
+		return
+
+	if _button_sound.stream == null:
+		return
+
+	_button_sound.play()

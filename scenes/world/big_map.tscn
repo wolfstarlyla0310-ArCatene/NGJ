@@ -7,6 +7,7 @@
 [ext_resource type="TileSet" uid="uid://d2eo6vu4rjpai" path="res://resources/lv2_tileset.tres" id="5_lv2"]
 [ext_resource type="Script" uid="uid://bawjpxul8w6li" path="res://scripts/noise_field.gd" id="6_noise"]
 [ext_resource type="TileSet" uid="uid://hpebaasxf5vw" path="res://resources/noise_tileset.tres" id="7_noise_tiles"]
+[ext_resource type="AudioStream" uid="uid://cr8nrrq5nm15c" path="res://assets/sound/GlassBreaking/dragon-studio-glass-breaking-504033.mp3" id="8_hs1ke"]
 [ext_resource type="PackedScene" uid="uid://0o65jgx0cps0" path="res://scenes/actors/player.tscn" id="8_player"]
 [ext_resource type="Script" uid="uid://c6gtx65hgfwb8" path="res://scripts/world/room_camera_controller.gd" id="9_room_camera"]
 [ext_resource type="Script" uid="uid://cb6hopafx35w5" path="res://scripts/world/room.gd" id="10_room"]
@@ -21,6 +22,7 @@
 [ext_resource type="TileSet" uid="uid://r7rgbb80mfmc" path="res://resources/barrier_tileset.tres" id="17_barrier_tiles"]
 [ext_resource type="PackedScene" uid="uid://gwtvsuubk8t4" path="res://scenes/actors/animal.tscn" id="18_b06ex"]
 [ext_resource type="Script" uid="uid://dy16fplp0y060" path="res://scripts/world/barrier_field.gd" id="18_barrier_field"]
+[ext_resource type="AudioStream" uid="uid://de7doawludec1" path="res://assets/sound/BottonClick/soundreality-button-202966.mp3" id="18_bk210"]
 [ext_resource type="PackedScene" path="res://scenes/world/collectible.tscn" id="18_vbl2u"]
 [ext_resource type="TileSet" uid="uid://bfyxcsbfd1gdt" path="res://resources/door_tileset.tres" id="19_door_tiles"]
 [ext_resource type="Script" uid="uid://dh8dmp7m7qroo" path="res://scripts/world/puzzle_door_manager.gd" id="20_door_manager"]
@@ -28,6 +30,9 @@
 [ext_resource type="PackedScene" path="res://scenes/world/button_once.tscn" id="24_cmc5e"]
 [ext_resource type="AudioStream" uid="uid://cidlemwksjpkj" path="res://assets/sound/player_move.wav" id="27_s3hkc"]
 [ext_resource type="AudioStream" uid="uid://xsaiiw2c5p6k" path="res://assets/sound/player_die.wav" id="28_m6fow"]
+[ext_resource type="AudioStream" uid="uid://8uejbs88y135" path="res://assets/sound/BlueDrop/freesound_community-clothes-drop-2-40202.mp3" id="30_7p7lg"]
+[ext_resource type="AudioStream" uid="uid://b3tjv07cc7pn0" path="res://assets/sound/YellowDrop/freesound_community-low-flr-93430.mp3" id="31_hs1ke"]
+[ext_resource type="AudioStream" uid="uid://kb3k80fapx5d" path="res://assets/sound/PickUP/pickup.mp3" id="33_fsaeh"]
 
 [node name="BigMap" type="Node2D" unique_id=349531101 node_paths=PackedStringArray("start_room")]
 script = ExtResource("1_world")
@@ -57,6 +62,9 @@ collision_enabled = false
 tile_map_data = PackedByteArray("AACEAP//AAAFAAUAAACDAP//AAADAAUAAACeAPz/AAADAAUAAACjAPz/AAAAAAUAAACiAPz/AAAAAAUAAAChAPz/AAAAAAUAAACgAPz/AAAAAAUAAACfAPz/AAAAAAUAAACkAPz/AAAFAAUAAABoAPv/AAACAAQAAABnAPv/AAAHAAEAAABmAPv/AAAHAAEAAABlAPv/AAABAAQAAABoAP7/AAADAAQAAABoAP3/AAACAAIAAABoAPz/AAACAAIAAABnAP7/AAABAAIAAABnAP3/AAAAAAAAAABnAPz/AAAAAAAAAABmAP7/AAABAAIAAABmAP3/AAAAAAAAAABmAPz/AAAAAAAAAABlAP7/AAAAAAQAAABlAP3/AAAFAAEAAABlAPz/AAAFAAEAAAA=")
 tile_set = ExtResource("5_lv2")
 collision_enabled = false
+
+[node name="GlassBreakingSound" type="AudioStreamPlayer" parent="Breakables" unique_id=928725907]
+stream = ExtResource("8_hs1ke")
 
 [node name="Spikes" type="TileMapLayer" parent="." unique_id=1937420101 node_paths=PackedStringArray("sound_fields", "breakables")]
 z_index = 3
@@ -242,32 +250,53 @@ z_index = 4
 position = Vector2(1096, 232)
 door_cells = Array[Vector2i]([Vector2i(71, 13)])
 
+[node name="BottonSound" type="AudioStreamPlayer2D" parent="Buttons/ButtonOnce" unique_id=516599441]
+stream = ExtResource("18_bk210")
+
 [node name="ButtonOnce2" parent="Buttons" unique_id=1565169479 instance=ExtResource("24_cmc5e")]
 position = Vector2(1320, 264)
 door_cells = Array[Vector2i]([Vector2i(75, 15)])
 
+[node name="BottonSound" type="AudioStreamPlayer2D" parent="Buttons/ButtonOnce2" unique_id=662929735]
+stream = ExtResource("18_bk210")
+
 [node name="ButtonOnce3" parent="Buttons" unique_id=1852700018 instance=ExtResource("24_cmc5e")]
 position = Vector2(2211, -184)
 door_cells = Array[Vector2i]([Vector2i(144, -7)])
+
+[node name="BottonSound" type="AudioStreamPlayer2D" parent="Buttons/ButtonOnce3" unique_id=697276609]
+stream = ExtResource("18_bk210")
 
 [node name="ButtonOnce4" parent="Buttons" unique_id=1708492185 instance=ExtResource("24_cmc5e")]
 position = Vector2(1865, 232)
 door_cells = Array[Vector2i]([Vector2i(112, 13)])
 keep_latched_on_reset = true
 
+[node name="BottonSound" type="AudioStreamPlayer2D" parent="Buttons/ButtonOnce4" unique_id=1477751941]
+stream = ExtResource("18_bk210")
+
 [node name="ButtonOnce5" parent="Buttons" unique_id=888408146 instance=ExtResource("24_cmc5e")]
 position = Vector2(2358, 185)
 door_cells = Array[Vector2i]([Vector2i(125, 13)])
+
+[node name="BottonSound" type="AudioStreamPlayer2D" parent="Buttons/ButtonOnce5" unique_id=838483669]
+stream = ExtResource("18_bk210")
 
 [node name="ButtonOnce6" parent="Buttons" unique_id=2050999385 instance=ExtResource("24_cmc5e")]
 position = Vector2(2767, 520)
 mode = 1
 door_cells = Array[Vector2i]([Vector2i(166, 35)])
 
+[node name="BottonSound" type="AudioStreamPlayer2D" parent="Buttons/ButtonOnce6" unique_id=2137743115]
+stream = ExtResource("18_bk210")
+
 [node name="ButtonOnce7" parent="Buttons" unique_id=1714967319 instance=ExtResource("24_cmc5e")]
 position = Vector2(2567, 520)
 mode = 1
 door_cells = Array[Vector2i]([Vector2i(166, 35)])
+
+[node name="BottonSound" type="AudioStreamPlayer2D" parent="Buttons/ButtonOnce7" unique_id=1344366224]
+stream = ExtResource("18_bk210")
 
 [node name="Collectibles" type="Node2D" parent="." unique_id=1912886951]
 z_index = 4
@@ -382,6 +411,15 @@ stream = ExtResource("27_s3hkc")
 
 [node name="DieSound" type="AudioStreamPlayer" parent="Player" unique_id=2024429597]
 stream = ExtResource("28_m6fow")
+
+[node name="BlueDropSound" type="AudioStreamPlayer" parent="Player" unique_id=1265244262]
+stream = ExtResource("30_7p7lg")
+
+[node name="YellowDropSound" type="AudioStreamPlayer" parent="Player" unique_id=2047515433]
+stream = ExtResource("31_hs1ke")
+
+[node name="PickUpSound" type="AudioStreamPlayer" parent="Player" unique_id=879828076]
+stream = ExtResource("33_fsaeh")
 
 [connection signal="screen_entered" from="Animals/Animal/AnimalVisible" to="Animals/Animal" method="_on_animal_visible_screen_entered"]
 [connection signal="screen_exited" from="Animals/Animal/AnimalVisible" to="Animals/Animal" method="_on_animal_visible_screen_exited"]

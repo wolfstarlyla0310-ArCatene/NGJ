@@ -21,9 +21,7 @@ const CEILING_PROBE_PIXELS: float = 3.0
 @export var terminal_fall_speed: float = 200.0
 @export var coyote_time: float = 0.12
 @export var jump_buffer: float = 0.12
-
 @export var walk_wave_interval_tiles: float = 2.0
-
 ## 走路 / lv0 落地声场边长（格）。
 @export var walk_wave_side_cells: float = 3.0
 
@@ -44,7 +42,9 @@ const CEILING_PROBE_PIXELS: float = 3.0
 
 @onready var move_audio: AudioStreamPlayer = get_node_or_null("MoveSound") as AudioStreamPlayer
 @onready var die_audio: AudioStreamPlayer = get_node_or_null("DieSound") as AudioStreamPlayer
-
+@onready var blue_drop_audio: AudioStreamPlayer = get_node_or_null("BlueDropSound") as AudioStreamPlayer
+@onready var yellow_drop_audio: AudioStreamPlayer = get_node_or_null("YellowDropSound") as AudioStreamPlayer
+@onready var pickup_audio: AudioStreamPlayer = get_node_or_null("PickUpSound") as AudioStreamPlayer
 
 # ==============================
 # 玩家状态
@@ -231,8 +231,8 @@ func _physics_process(delta: float) -> void:
 # 落地声波
 # ==============================
 
-func _emit_landing_wave() -> void:
 
+func _emit_landing_wave() -> void:
 	var drop: float = maxf(
 		0.0,
 		global_position.y - _fall_apex_y
@@ -261,6 +261,7 @@ func _emit_landing_wave() -> void:
 	elif level == 2:
 		side_cells = landing_lv2_side_cells
 
+	# 保留原有的落地声波
 	wave_emitted.emit(
 		global_position,
 		side_cells * TILE_SIZE,
@@ -268,13 +269,23 @@ func _emit_landing_wave() -> void:
 		"landing"
 	)
 
+	# 根据落地声波等级播放对应音效
+	match level:
+		1:
+			if blue_drop_audio != null and blue_drop_audio.stream != null:
+				blue_drop_audio.play()
+
+		2:
+			if yellow_drop_audio != null and yellow_drop_audio.stream != null:
+				yellow_drop_audio.play()
+
+
 
 # ==============================
 # 顶头声波
 # ==============================
 
 func _emit_ceiling_wave() -> void:
-
 	if _jump_start_against_ceiling:
 		wave_emitted.emit(
 			global_position,
@@ -282,6 +293,9 @@ func _emit_ceiling_wave() -> void:
 			2,
 			"ceiling"
 		)
+
+		if yellow_drop_audio != null and yellow_drop_audio.stream != null:
+			yellow_drop_audio.play()
 	else:
 		wave_emitted.emit(
 			global_position,
@@ -289,6 +303,9 @@ func _emit_ceiling_wave() -> void:
 			1,
 			"ceiling"
 		)
+
+		if blue_drop_audio != null and blue_drop_audio.stream != null:
+			blue_drop_audio.play()
 
 
 # ==============================
@@ -445,3 +462,11 @@ func _launch_speed(
 			2.0 * Engine.physics_ticks_per_second
 		)
 	)
+	
+func play_pickup_sound() -> void:
+	if pickup_audio == null or pickup_audio.stream == null:
+		return
+
+	pickup_audio.play()
+	
+	
