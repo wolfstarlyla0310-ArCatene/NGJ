@@ -84,3 +84,20 @@ func _restore_all() -> void:
 		var data: Dictionary = _painted[cell]
 		set_cell(cell, int(data["source"]), data["atlas"], int(data["alternative"]))
 	_hidden.clear()
+
+
+# Noise 进入画面时开始播放音效
+func _on_visible_on_screen_notifier_2d_screen_entered() -> void:
+	var noise_sound := get_node_or_null("NoiseSound") as AudioStreamPlayer
+
+	if noise_sound != null and noise_sound.stream != null:
+		if not noise_sound.playing:
+			noise_sound.play()
+
+
+# Noise 离开画面时停止播放音效
+func _on_visible_on_screen_notifier_2d_screen_exited() -> void:
+	var noise_sound := get_node_or_null("NoiseSound") as AudioStreamPlayer
+
+	if noise_sound != null:
+		noise_sound.stop()

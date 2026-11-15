@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://d2r82au5nejjl" path="res://scripts/breakables.gd" id="3_breakables"]
 [ext_resource type="TileSet" uid="uid://cp2nd50h3p22b" path="res://resources/lv1_tileset.tres" id="4_lv1"]
 [ext_resource type="TileSet" uid="uid://d2eo6vu4rjpai" path="res://resources/lv2_tileset.tres" id="5_lv2"]
+[ext_resource type="AudioStream" uid="uid://benheapjukfc8" path="res://assets/sound/noise.wav" id="5_m6fow"]
 [ext_resource type="Script" uid="uid://bawjpxul8w6li" path="res://scripts/noise_field.gd" id="6_noise"]
 [ext_resource type="TileSet" uid="uid://hpebaasxf5vw" path="res://resources/noise_tileset.tres" id="7_noise_tiles"]
 [ext_resource type="PackedScene" uid="uid://0o65jgx0cps0" path="res://scenes/actors/player.tscn" id="8_player"]
@@ -43,6 +44,11 @@ tile_map_data = PackedByteArray("AAASAPv/AAAAAAAAAAASAPz/AAAAAAAAAAASAP3/AAAAAAA
 tile_set = ExtResource("7_noise_tiles")
 collision_enabled = false
 script = ExtResource("6_noise")
+
+[node name="NoiseSound" type="AudioStreamPlayer" parent="Noise" unique_id=156700261]
+stream = ExtResource("5_m6fow")
+
+[node name="VisibleOnScreenNotifier2D" type="VisibleOnScreenNotifier2D" parent="Noise" unique_id=2117313311]
 
 [node name="Node2D" type="Node2D" parent="." unique_id=621144936]
 
@@ -358,3 +364,6 @@ buttons_root = NodePath("../Buttons")
 
 [node name="Player" parent="." unique_id=262401040 instance=ExtResource("8_player")]
 position = Vector2(194, 229)
+
+[connection signal="screen_entered" from="Noise/VisibleOnScreenNotifier2D" to="Noise" method="_on_visible_on_screen_notifier_2d_screen_entered"]
+[connection signal="screen_exited" from="Noise/VisibleOnScreenNotifier2D" to="Noise" method="_on_visible_on_screen_notifier_2d_screen_exited"]
