@@ -68,7 +68,7 @@ func _run() -> void:
 	check(absf(camera.zoom.x - _fit_zoom(room1, viewport_size)) < 0.02,
 		"Camera zooms to fit the start room")
 
-	# 2b. 每个存档点每 0.2 秒发一次 5 格（80px）白色安全声场。
+	# 2b. 每个存档点每 1 秒发一次、持续 1 秒的 5 格（80px）白色安全声场。
 	await frames(2)
 	var cp_field: SoundField = null
 	for child in level.sound_fields.get_children():
@@ -83,13 +83,14 @@ func _run() -> void:
 	for child in level.sound_fields.get_children():
 		if child is SoundField and child.emitter == null:
 			child.queue_free()
-	await frames(30)
+	var checkpoint_interval: float = level.get_node("Objects/Checkpoint1").field_interval
+	await frames(ceili(checkpoint_interval * Engine.physics_ticks_per_second) + 2)
 	var reemitted := false
 	for child in level.sound_fields.get_children():
 		if child is SoundField and child.emitter == null and absf(child.side_length - 80.0) < 0.01:
 			reemitted = true
 			break
-	check(reemitted, "Checkpoint re-emits within 0.2 s")
+	check(reemitted, "Checkpoint re-emits at its configured interval")
 
 	# 3. 声场视觉：在 expand_duration 内从中心扩到目标边长（判定仍是满尺寸，不随视觉变化）。
 	var field := SoundField.new()

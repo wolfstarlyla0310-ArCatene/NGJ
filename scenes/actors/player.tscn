@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" uid="uid://piipypeag2ln" path="res://scripts/player.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://dgdhco5jh8xlj" path="res://assets/player/player.png" id="2_ru62r"]
+[ext_resource type="AudioStream" path="res://assets/sound/player_move.wav" id="3_move_sound"]
+[ext_resource type="AudioStream" path="res://assets/sound/player_die.wav" id="4_die_sound"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_player"]
 size = Vector2(12, 14)
@@ -22,3 +24,9 @@ texture = ExtResource("2_ru62r")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1510722603]
 position = Vector2(0, 4)
 shape = SubResource("RectangleShape2D_player")
+
+[node name="MoveSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("3_move_sound")
+
+[node name="DieSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("4_die_sound")
