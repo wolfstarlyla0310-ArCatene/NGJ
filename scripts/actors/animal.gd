@@ -360,18 +360,8 @@ func _draw() -> void:
 	draw_rect(Rect2(-4, -3, 2, 2), Color.BLACK)
 	draw_rect(Rect2(2, -3, 2, 2), Color.BLACK)
 
-
-func _on_visible_on_screen_notifier_2d_screen_entered() -> void:
-	_animal_sound_elapsed = 0.0
-	$AnimalSound.play()
-
-
-func _on_visible_on_screen_notifier_2d_screen_exited() -> void:
-	$AnimalSound.stop()
-	_animal_sound_elapsed = 0.0
-
 func _process(delta: float) -> void:
-	if not $VisibleOnScreenNotifier2D.is_on_screen():
+	if not $AnimalVisible.is_on_screen():
 		return
 
 	if $AnimalSound.playing:
@@ -383,3 +373,17 @@ func _process(delta: float) -> void:
 	if _animal_sound_elapsed >= animal_sound_interval:
 		_animal_sound_elapsed = 0.0
 		$AnimalSound.play()
+
+
+# 动物进入画面时，立即播放叫声
+func _on_animal_visible_screen_entered() -> void:
+	_animal_sound_elapsed = 0.0
+
+	if $AnimalSound.stream != null:
+		$AnimalSound.play()
+
+
+# 动物离开画面时，停止叫声
+func _on_animal_visible_screen_exited() -> void:
+	$AnimalSound.stop()
+	_animal_sound_elapsed = 0.0
