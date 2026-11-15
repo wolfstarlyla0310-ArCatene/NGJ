@@ -60,13 +60,14 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 - `Noise` TileMapLayer 使用半透明红色 16×16 瓦片绘制；运行时绘制的格子自动成为噪音区域（纯视觉、无碰撞）。
 - **身体任意部分接触**噪音格就开始冷却；只要身体还碰着噪音且中心不在现存声场内，冷却持续递减。
 - 使用**可调冷却**（`Noise Grace Seconds`，默认 0.3 秒，在 `BigMap` 根节点检查器调整）：离开噪音或中心进入声场时重置为满值；冷却结束时仍接触噪音则死亡。
-- 只有被**单个声场完整覆盖**的噪音格才会暂时隐藏；声场已吸附到 16px 网格，因此覆盖到的格子按整格隐藏，部分重叠不隐藏。隐藏的格子仍然致命，声场消失后恢复显示。
+- 噪音格只要**格子中心落在单个声场矩形内**就会暂时隐藏；声场已吸附到 16px 网格，边缘格与内部格表现一致。隐藏的格子仍然致命，声场消失后恢复显示。
 - 死亡 = 回到存档点 + 重置存档点房间，噪音绘制保留，死亡计数 +1。
 
 ## 刺怪（spike 变成的追击怪）
 
 - 在 `Spikes` 层用 `spike_tileset.tres` 绘制/刷刺格（编辑器里显示红色叉/方框，方便摆放）；**运行时整层隐藏**。
 - 进入游戏后，**四邻相连**的刺格自动变成一只怪（`scripts/actors/spike_monster.gd`），挂在 `Monsters` 容器下。
+- 视觉为间歇三连红色短声场；闪烁间隔默认 **2 秒**，可在 `Spikes` 节点的「刺怪视觉」分组里调整。
 - 怪**不绘制 tile 贴图**：视觉沿用旧 spike 的**间歇三连红色短声场**（每格每轮 3 个 48px 短场）；命中/接触判定仍是每格 16×16。
 - 怪**不受重力、穿墙飞行**，只在出生房间的矩形内活动，不会跨房间追击。
 - 追击同一房间内发出声场的目标：**动物一直追**；**玩家只在移动时被追**（静止不追）；**离谁近追谁**。
@@ -131,6 +132,13 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 - 房间裁剪时，远处房间的收集品会停止旋转、不可见；进入该房间后恢复。
 - 一次性收集：房间重置不会复活；需要计分/UI 时订阅 `collected`。
 
+## 音频
+
+- 全局自动加载单例 **`AudioManager`**（`scripts/audio/audio_manager.gd`）把音效按类别接到总线：`Move`（走路）、`Die`（死亡）、`Animal`（动物叫声）。
+- 所有音量集中在 **`resources/audio_settings.tres`**（`AudioSettings` 资源）：`Move Db`（默认 **-12 dB**，走路声音已调轻）、`Die Db`、`Animal Db`。在检查器改数值后运行即可生效。
+- 音源只负责挂 Stream 并选择总线（`Player/MoveSound`、`Player/DieSound`、`Animal/AnimalSound`），不再在各处单独写死音量。
+- 新增音效时：在 `default_bus_layout.tres` 加总线，并在 `AudioManager.CATEGORY_BUSES` / `AudioSettings` 增加类别。
+
 ## 正式大地图与房间
 
 - `scenes/world/big_map.tscn` 是默认入口：一张大地图 + `Rooms/RoomN` 房间框。
@@ -180,9 +188,10 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | `scripts/world/collectible.gd`、`scenes/world/collectible.tscn`、`assets/star.png` | 收集品星星：无碰撞、玩家接触即收集、缓慢旋转 |
 | `scripts/actors/animal.gd`、`scenes/actors/animal.tscn` | 受重力动物：lv1 驱赶、移动/静止发蓝色 lv1 声场、爬一格/过一格沟/换房刷新 |
 | `scripts/breakables.gd` | 图格绘制转碰撞、同级声场震碎、按房间恢复 |
-| `scripts/noise_field.gd` | 红色绘制转噪音区域；单个声场完全覆盖才隐藏，身体矩形接触判定 |
+| `scripts/noise_field.gd` | 红色绘制转噪音区域；格子中心在单个声场内即隐藏，身体矩形接触判定 |
+| `scripts/audio/audio_manager.gd`、`scripts/audio/audio_settings.gd`、`resources/audio_settings.tres`、`default_bus_layout.tres` | 全局音频：Move/Die/Animal 总线 + 集中可调音量 |
 | `resources/whitebox_tileset.tres` | 16×16、47 格黑白 blob 地形图集，含完整物理层 |
-| `resources/lv1_tileset.tres`、`lv2_tileset.tres`、`noise_tileset.tres` | 玻璃与噪音瓦片集 |
+| `resources/lv1_tileset.tres`、`lv2_tileset.tres`、`noise_tileset.tres`、`assets/tiles/noise_tile.png` | 玻璃与噪音瓦片集（噪音使用 PNG 贴图） |
 | `resources/spike_tileset.tres`、`assets/tiles/spike_tile.svg` | 刺图格的编辑器可见标记（运行时刺层隐藏） |
 | `resources/trigger_tileset.tres`、`assets/tiles/wind.png` | 触发方块的可见 16×16 图块（常显、无碰撞） |
 | `resources/barrier_tileset.tres`、`assets/tiles/barrier_tile.svg` | 声场屏障图块（编辑器可见、含物理层） |
@@ -194,6 +203,8 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 用实际 Godot 引擎运行，无外部测试框架。将 `godot` 替换为本机引擎路径：
 
 ```powershell
+# 音频套件需要渲染窗口（不要加 --headless）
+godot --path . --script res://tests/audio_node_checks.gd
 godot --headless --path . --script res://tests/keyboard_movement_checks.gd
 godot --headless --path . --script res://tests/big_map_checks.gd
 godot --headless --path . --script res://tests/spike_checks.gd
@@ -204,9 +215,10 @@ godot --headless --path . --script res://tests/button_door_checks.gd
 godot --headless --path . --script res://tests/collectible_checks.gd
 ```
 
-- `keyboard_movement_checks.gd`：80 项，覆盖跳跃/起跳悬停、顶天花板 lv1/lv2（零净空）声场、贴墙发声场、声场等级/边长/颜色、声场 16px 网格吸附、lv2 2 秒寿命、最大下落速度限制、走路/撞墙、玻璃破碎与恢复、可调噪音冷却/身体接触/整格隐藏、调试传送。
+- `keyboard_movement_checks.gd`：81 项，覆盖跳跃/起跳悬停、顶天花板 lv1/lv2（零净空）声场、贴墙发声场、声场等级/边长/颜色、声场 16px 网格吸附、lv2 2 秒寿命、最大下落速度限制、走路/撞墙、玻璃破碎与恢复、可调噪音冷却/身体接触/中心覆盖隐藏、调试传送。
 - `big_map_checks.gd`：54 项，覆盖玩家可见贴图、Start Room 起始房间、房间、相机切关、声场扩散、存档点每 0.2 秒 80px 声场、进房不自动绑定/接触才绑定存档点、死亡需按 R 且隐藏贴图、房间裁剪（仅当前房间 / Room4+Room5、Room6+Room8 联动）、跨房间刷新与联动组一起刷新、动物归位与被驱赶换房后的刷新点。
-- `spike_checks.gd`：20 项，覆盖刺层隐藏、四邻分组生成怪、三连红波视觉/判定仍按 tile、无重力、追动物/移动玩家、近者优先、不跨房间、玩家 lv1 推开、lv2 定住、非玩家声场不推怪、R 归位、接触吃玩家/动物、被吃动物 R 复活。
+- `spike_checks.gd`：22 项，覆盖刺层隐藏、四邻分组生成怪、三连红波视觉（默认 2 秒间隔）/判定仍按 tile、无重力、追动物/移动玩家、近者优先、不跨房间、玩家 lv1 推开、lv2 定住、非玩家声场不推怪、R 归位、接触吃玩家/动物、被吃动物 R 复活。
+- `audio_node_checks.gd`：20 项，覆盖动物/玩家音效节点、总线归属（Move/Die/Animal）、`AudioManager` 自动加载与 `AudioSettings` 音量应用；需要渲染窗口（不要加 `--headless`）。
 - `trigger_checks.gd`：7 项，覆盖触发格存在、站上去重复发白色 48px 声场、安全区、不碎玻璃、冷却。
 - `barrier_checks.gd`：8 项，覆盖屏障未激活 20% 透明、任意声场完整显形、物理层、阻挡玩家、声场结束 1.2 秒后回到 20%。
 - `door_animal_checks.gd`：26 项，覆盖门脉冲、红脉冲吃白声场主人、门随房间恢复、动物重力/贴图/蓝色 lv1 静止声场（停止后立即发）/lv1 驱赶/移动声场与时长扩散、lv2 震飞、平台边缘停住、一格深沟走过、爬一格台阶、归位、门吃动物。

@@ -455,7 +455,7 @@ func _run() -> void:
 	await frames(120)
 	check(level.deaths == deaths_before, "Standing outside noise is always safe")
 
-	# 7c. A noise cell is hidden only when fully covered by a single field.
+	# 7c. A noise cell is hidden when its center falls inside a single field.
 	level.noise.clear_all()
 	var cover_cell := Vector2i(30, 33)
 	var cover_cells: Array[Vector2i] = [cover_cell]
@@ -463,10 +463,14 @@ func _run() -> void:
 	await frames(2)
 	var cover_center: Vector2 = level.noise.to_global(level.noise.map_to_local(cover_cell))
 	var cover_rect := Rect2(cover_center - Vector2(8, 8), Vector2(16, 16))
-	var partial := Rect2(cover_rect.position + Vector2(8, 0), cover_rect.size)
+	var partial := Rect2(cover_rect.position + Vector2(12, 0), cover_rect.size)
 	var partial_rects: Array[Rect2] = [partial]
 	level.noise.sync_visibility(partial_rects)
-	check(not level.noise.is_cell_hidden(cover_cell), "Partially overlapping field does not hide a noise cell")
+	check(not level.noise.is_cell_hidden(cover_cell), "A quarter-covered noise cell stays visible")
+	var majority := Rect2(cover_rect.position + Vector2(4, 0), cover_rect.size)
+	var majority_rects: Array[Rect2] = [majority]
+	level.noise.sync_visibility(majority_rects)
+	check(level.noise.is_cell_hidden(cover_cell), "A mostly covered noise cell hides")
 	var full_rects: Array[Rect2] = [cover_rect.grow(2.0)]
 	level.noise.sync_visibility(full_rects)
 	check(level.noise.is_cell_hidden(cover_cell), "Fully covering field hides a noise cell")

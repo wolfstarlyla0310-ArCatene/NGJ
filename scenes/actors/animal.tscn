@@ -25,6 +25,7 @@ shape = SubResource("RectangleShape2D_animal")
 
 [node name="AnimalSound" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("3_animal_sound")
+bus = &"Animal"
 
 [node name="VisibleOnScreenNotifier2D" type="VisibleOnScreenNotifier2D" parent="."]
 rect = Rect2(-8, -8, 16, 16)

@@ -27,6 +27,8 @@ shape = SubResource("RectangleShape2D_player")
 
 [node name="MoveSound" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("3_move_sound")
+bus = &"Move"
 
 [node name="DieSound" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("4_die_sound")
+bus = &"Die"

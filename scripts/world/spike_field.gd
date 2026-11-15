@@ -17,6 +17,19 @@ const MONSTER_SCRIPT := preload("res://scripts/actors/spike_monster.gd")
 ## 刺怪容器；留空时自动在父节点下找/建 `Monsters`。
 @export var monsters_root: Node2D
 
+@export_group("刺怪视觉")
+## 两轮红色短声场之间的间隔（秒）。
+@export var monster_visual_cycle_interval := 2.0
+## 单轮连发之间的间隔（秒）。
+@export var monster_visual_burst_interval := 0.1
+## 每轮连发数量。
+@export var monster_visual_burst_count := 3
+## 红色短声场边长（格）。
+@export var monster_visual_side_cells := 3.0
+## 单个红色短声场寿命（秒）。
+@export var monster_visual_lifetime := 0.2
+@export var monster_visual_color := Color(1.0, 0.2, 0.2, 1.0)
+
 var _monsters: Array[Node] = []
 
 func _ready() -> void:
@@ -39,6 +52,12 @@ func _spawn_monsters() -> void:
 			offsets.append(to_global(map_to_local(cell)) - group_center)
 		var monster = MONSTER_SCRIPT.new()
 		monster.set("sound_fields", sound_fields)
+		monster.set("visual_cycle_interval", monster_visual_cycle_interval)
+		monster.set("visual_burst_interval", monster_visual_burst_interval)
+		monster.set("visual_burst_count", monster_visual_burst_count)
+		monster.set("visual_side_cells", monster_visual_side_cells)
+		monster.set("visual_lifetime", monster_visual_lifetime)
+		monster.set("visual_color", monster_visual_color)
 		root.add_child(monster)
 		monster.call("setup", group_center, offsets, bounds.size)
 		_monsters.append(monster)

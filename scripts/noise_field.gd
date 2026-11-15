@@ -1,8 +1,8 @@
 class_name NoiseField
 extends TileMapLayer
-## Painted red cells define the noise area. A cell is hidden only when a single active
-## sound field fully encloses it; partial overlap leaves it visible. Hidden cells are
-## still lethal.
+## Painted red cells define the noise area. A cell is hidden when its center falls inside
+## a single active sound field rect; edge cells behave the same as interior ones. Hidden
+## cells are still lethal.
 
 const DEFAULT_TILE_SIZE := Vector2(16.0, 16.0)
 
@@ -45,7 +45,8 @@ func sync_visibility(pulse_rects: Array[Rect2]) -> void:
 			for y in range(mini(a.y, b.y), maxi(a.y, b.y) + 1):
 				var cell := Vector2i(x, y)
 				# 只有被单个声场完整包住（含边线）的已绘制格子才隐藏。
-				if _painted.has(cell) and area.encloses(_cell_rect(cell)):
+				# 格子中心在单个声场矩形内就隐藏：边缘列与内部格行为一致。
+				if _painted.has(cell) and area.has_point(_cell_rect(cell).get_center()):
 					covered[cell] = true
 	for cell in covered:
 		if not _hidden.has(cell):

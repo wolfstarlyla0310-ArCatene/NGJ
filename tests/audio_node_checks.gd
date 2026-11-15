@@ -30,6 +30,7 @@ func _run() -> void:
 	var audio := animal.get_node_or_null("AnimalSound") as AudioStreamPlayer
 	var notifier := animal.get_node_or_null("VisibleOnScreenNotifier2D") as VisibleOnScreenNotifier2D
 	check(audio != null and audio.stream != null, "Animal prefab includes its call audio and sound resource")
+	check(audio != null and audio.bus == &"Animal", "Animal call routes to the Animal bus")
 	check(notifier != null and notifier.screen_entered.is_connected(animal._on_visible_on_screen_notifier_2d_screen_entered)
 		and notifier.screen_exited.is_connected(animal._on_visible_on_screen_notifier_2d_screen_exited),
 		"Animal prefab connects actual screen enter/exit signals")
@@ -65,6 +66,20 @@ func _run() -> void:
 	check(player.move_audio != null and player.move_audio.stream != null
 		and player.die_audio != null and player.die_audio.stream != null,
 		"Player prefab includes both movement and death sound resources")
+	check(player.move_audio.bus == &"Move" and player.die_audio.bus == &"Die",
+		"Player sounds route to Move/Die buses")
+	var manager := root.get_node_or_null("AudioManager")
+	check(manager != null, "AudioManager autoload is present")
+	var move_bus := AudioServer.get_bus_index("Move")
+	var die_bus := AudioServer.get_bus_index("Die")
+	var animal_bus := AudioServer.get_bus_index("Animal")
+	check(move_bus >= 0 and die_bus >= 0 and animal_bus >= 0,
+		"Move/Die/Animal audio buses exist")
+	if manager != null and move_bus >= 0:
+		var settings_obj := manager.get("settings") as Resource
+		var move_db: float = float(settings_obj.get("move_db")) if settings_obj != null else 0.0
+		check(absf(AudioServer.get_bus_volume_db(move_bus) - move_db) < 0.1,
+			"Move bus volume follows AudioSettings")
 	player._play_move_sound()
 	check(player.move_audio.playing, "Player movement sound plays")
 	player.move_audio.stop()

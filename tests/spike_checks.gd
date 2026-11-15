@@ -60,6 +60,11 @@ func _run() -> void:
 		quit(1)
 		return
 	check(pair_monster.get_child_count() == 2, "A two-cell spike group becomes one two-cell monster")
+	var default_interval: float = float(spikes.get("monster_visual_cycle_interval"))
+	var monster_interval: float = float(pair_monster.get("visual_cycle_interval"))
+	check(is_equal_approx(default_interval, 2.0), "Monster blink interval defaults to 2 seconds")
+	check(is_equal_approx(monster_interval, default_interval),
+		"Monsters use the Spikes node's blink interval")
 	for monster in monsters:
 		monster.visual_cycle_interval = 0.05
 		monster.visual_burst_interval = 0.05
