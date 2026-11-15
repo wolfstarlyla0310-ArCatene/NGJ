@@ -1,4 +1,4 @@
-# ECHO / 同行 · Godot 白盒
+# Keep Sound 驻声 · Godot 白盒
 
 **当前玩法：** 纯键盘平台移动 + 分级白色方形声场。玩家本体使用 `white_thing.png` 贴图显示；行走与落地会留下声场，声场可震碎同级玻璃；红色噪音场中身体碰到噪音会进入可调冷却（默认 0.3 秒，期间贴图渐红），冷却结束时仍在噪音里才回到存档点。
 
@@ -67,16 +67,20 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 - **危险渐红**：冷却递减期间玩家贴图从白色逐渐变红；离开噪音、进入安全声场、死亡或按 R 复活时立即恢复白色。
 - 噪音格只要**格子中心落在单个声场矩形内**就会暂时隐藏；声场已吸附到 16px 网格，边缘格与内部格表现一致。隐藏的格子仍然致命，声场消失后恢复显示。
 - 死亡 = 回到存档点 + 重置存档点房间，噪音绘制保留，死亡计数 +1。
+- **噪音格不发声**：noise tile 只负责区域 / 隐藏 / 致命判定，不再播放任何音效；场景里的 `NoiseSound` 节点保留但保持静默（开局、进入画面都不会响）。
 
 ## 刺怪（spike 变成的追击怪）
 
 - 在 `Spikes` 层用 `spike_tileset.tres` 绘制/刷刺格（编辑器里显示红色叉/方框，方便摆放）；**运行时整层隐藏**。
 - 进入游戏后，**四邻相连**的刺格自动变成一只怪（`scripts/actors/spike_monster.gd`），挂在 `Monsters` 容器下。
-- 视觉为间歇三连红色短声场；闪烁间隔默认 **2 秒**，可在 `Spikes` 节点的「刺怪视觉」分组里调整。
-- 怪**不绘制 tile 贴图**：视觉沿用旧 spike 的**间歇三连红色短声场**（每格每轮 3 个 48px 短场）；命中/接触判定仍是每格 16×16。
+- 视觉为**整组最外缘的满尺寸外框**：每轮只闪 1 次，不再从怪物内部逐格发射；方框立即满尺寸后淡出。边缘尺寸 = 组最长边 + (`Visual Side Cells - 1`) 格（默认单格 48px；大地图 2.5 格 → 单格 40px、2×2 组 56px）。
+- 闪烁间隔 `Visual Cycle Interval`、寿命 `Visual Lifetime` 可在 `Spikes` 节点的「刺怪视觉」分组里调整；大地图为 **0.4 秒周期 / 0.15 秒寿命**（快速一明一灭），单个怪物同一时刻最多 1 个外框。
+- 怪物外框标记为**永不被覆盖**（`never_covered`）：即使与其它同色红色声场（另一只怪、死亡场、门的红脉冲）重叠，四边也始终完整显示；反过来其它声场仍会被怪物外框覆盖。
+- **持续噪音**：每只怪循环播放 `assets/sound/noise.wav`（`Noise` 总线），音量按玩家与怪的**曼哈顿距离**线性衰减，8 格（128px）外停止；`Audible Range Cells` 可在检查器调整。房间裁剪禁用怪物处理时会显式停止音频，恢复房间后重新开始。
+- 怪**不绘制 tile 贴图**；命中/接触判定仍是每格 16×16。
 - 怪**不受重力、穿墙飞行**，只在出生房间的矩形内活动，不会跨房间追击。
 - 追击同一房间内发出声场的目标：**动物一直追**；**玩家只在移动时被追**（静止不追）；**离谁近追谁**。
-- 玩家 **lv1 波**命中 → 怪被**推走**，击退期间视觉脉冲变为**蓝色**；**lv2 波**命中 → 怪被**定住**（不推走，持续到波消失），定住期间脉冲变为**黄色**；其余时间保持红色。
+- 玩家 **lv1 波**命中 → 怪被**推走**，击退期间外框变为**蓝色**；**lv2 波**命中 → 怪被**定住**（不推走，持续到波消失），定住期间外框变为**黄色**；其余时间保持红色。状态切换时会立即补闪一次，不必等下一轮定时闪烁。
 - 怪碰到玩家 → 玩家死亡；碰到动物 → 动物被吃掉。目标被吃掉/消耗后不再被追：每帧重新选目标，有其它活目标就换，没有就原地停止（不会停在尸体位置）。
 - R / 死亡重置时怪回到出生位置。
 
@@ -143,8 +147,9 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 ## 音频
 
 - 全局自动加载单例 **`AudioManager`**（`scripts/audio/audio_manager.gd`）是音频总控器：启动时把 **`resources/audio_settings.tres`**（`AudioSettings` 资源）里的全部音量写入对应总线。
-- 检查器里可调的类别：`Master Db`（总音量）、`Move Db`（走路，默认 **-12 dB**）、`Die Db`、`Animal Db`（默认 **-6 dB**）、`Jump Db`（小跳/小顶头）、`Drop Db`（大跳/大顶头）、`Pickup Db`（拾取）、`Glass Db`（玻璃破碎）、`Noise Db`（噪音提示）、`Button Db`（按钮）。改完数值运行即生效，无需改场景节点。
-- 音源只负责挂 Stream 并选择总线：`Player/MoveSound`→`Move`、`Player/DieSound`→`Die`、`Player/BlueDropSound`→`Jump`、`Player/YellowDropSound`→`Drop`、`Player/PickUpSound`→`Pickup`、`Animal/AnimalSound`→`Animal`、`Noise/NoiseSound`→`Noise`、`Breakables/GlassBreakingSound`→`Glass`、按钮 `BottonSound`→`Button`。
+- 检查器里可调的类别（当前值）：`Master Db` **0**、`Move Db`（走路）**-7**、`Die Db`（死亡）**-4**、`Animal Db`（动物叫声）**-11**、`Jump Db`（小跳/小顶头）**0**、`Drop Db`（大跳/大顶头）**-6**、`Pickup Db`（拾取）**0**、`Glass Db`（玻璃破碎）**-8**、`Noise Db`（噪音提示）**0**、`Button Db`（按钮）**-2**（单位 dB）。改完数值运行即生效，无需改场景节点。
+- 音源只负责挂 Stream 并选择总线：`Player/MoveSound`→`Move`、`Player/DieSound`→`Die`、`Player/BlueDropSound`→`Jump`、`Player/YellowDropSound`→`Drop`、`Player/PickUpSound`→`Pickup`、`Animal/AnimalSound`→`Animal`、`Noise/NoiseSound`→`Noise`（噪音格已静音，节点仅保留）、`Breakables/GlassBreakingSound`→`Glass`、按钮 `BottonSound`→`Button`。
+- 刺怪在 `setup()` 中创建 `MonsterSound`（`noise.wav`、`Noise` 总线、向前循环），按玩家曼哈顿距离 8 格衰减；存档点激活音效使用 `Pickup` 总线的一次性播放器。
 - 例外：`Animal/AnimalSound.volume_db` 由动物按**玩家曼哈顿距离**每帧设置（0 格 0 dB → 8 格静音），最终音量 = 距离衰减 × `Animal` 总线音量。
 - 玩家**小跳落地（lv1）与小顶头（lv1）**音效使用 `assets/sound/player_jump.wav`（与走路同一个文件）；大跳/大顶头仍用 `YellowDrop`。
 - 新增音效时：在 `default_bus_layout.tres` 加总线，并在 `AudioManager.CATEGORY_BUSES` / `AudioSettings` 增加类别；`AudioManager.apply_settings()` 会自动遍历应用。
@@ -157,8 +162,10 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 - 存档点**必须实际接触 Checkpoint 才更新**；只进入房间不再自动绑定。房间内没有 Checkpoint、或还没接触过任何 Checkpoint 时，重生点使用玩家当前位置（开局位置/起始锚点）。
 - 存档点贴图：未激活使用 `assets/flag_close.png`（80% 不透明度），激活后换成 `assets/flag_open.png`（完全不透明）。
 - 存档点**只在玩家接触并绑定后**发出一次 **5 格 / 80px** 白色 lv0 安全场（`emitter` 为空，门不会吃它；`lifetime = INF`、`persistent = true`），之后**一直保持**：更换绑定点、离开房间、按 R / 死亡重置都不会移除；未激活的存档点没有安全区。声场带**渐隐渐显**视觉循环（`field_fade_seconds` 默认 1.2 秒、`field_min_alpha` 默认 0.35，只改节点透明度，不影响安全/隐藏噪音等判定）。
+- 玩家**激活存档点时播放一次星星收集品音效**（`assets/sound/PickUP/pickup.mp3`，`Pickup` 总线）。只在 `set_active` 的未激活→激活转换时触发，重启安全场/复活不会重播。
 - **死亡**：玩家停在死亡位置、不可操作，**贴图立即隐藏**；按一次 **R** 才回存档点并重置存档点房间（清声场、还原玻璃/刺/门、动物全部归位、相机瞬时 snap），同时恢复玩家贴图。存活时按 R 仍是手动重置。
 - **跨房间刷新**：玩家离开一个房间（组）时，上一个房间自动刷新（玻璃、陷阱门、解谜门/按钮、动物、刺怪）；**联动房间一起刷新**（**Room3+Room4+Room5**、Room6+Room8），在联动组内部移动不触发刷新。
+- **Room2 的 R 键提示**（`Node2D/R`）初始隐藏，玩家**第一次死亡后永久显示**；按 R 复活后仍保留，提醒玩家可用 R 回到存档点。
 - 存档点只是**本局内的一个世界坐标**：不写磁盘、不加标题界面、下次启动不会读档。
 - 地形直接用 TileMap 绘制（白盒图集带完整 16px 碰撞）。
 - **性能/房间裁剪**：只让玩家**当前房间**内的 `Checkpoint` / `Animal` / `Button` 参与处理与渲染；其它房间的节点保留但不处理、不显示。联动组：**Room3+Room4+Room5**、**Room6+Room8** 各自一起加载。噪音可见性只扫描声场覆盖到的格子；`DoorTiles` / `DoorManager` 保持全局（有一扇门跨房间）。
@@ -180,16 +187,16 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | 文件 / 目录 | 用途 |
 |---|---|
 | `scenes/world/big_map.tscn` | 默认入口：正式大地图 |
-| `scripts/world/world_map.gd` | 房间、切关接线、存档点绑定、单房间 R、噪音死亡 |
+| `scripts/world/world_map.gd` | 房间、切关接线、存档点绑定、单房间 R、噪音死亡、第一次死亡后显示 R 提示 |
 | `scripts/world/room.gd` | 房间框（`@tool` 蓝框 gizmo、取景/R 范围） |
 | `scripts/world/room_camera_controller.gd` | 房间切换：相机 Tween + 自动缩放（`fit_margin=0` 精确铺满） |
-| `scripts/world/checkpoint.gd`、`scenes/world/checkpoint.tscn`、`assets/flag_close.png`、`assets/flag_open.png` | 存档点：重生坐标 + 玩家激活后持续 80px 白色安全声场 + 激活前后旗子贴图 |
+| `scripts/world/checkpoint.gd`、`scenes/world/checkpoint.tscn`、`assets/flag_close.png`、`assets/flag_open.png` | 存档点：重生坐标 + 玩家激活后持续 80px 白色安全声场 + 激活前后旗子贴图 + 激活时播放一次拾取音效 |
 | `addons/room_editor/` | 房间编辑器插件（添加房间 / 校验 / 拖拽手柄） |
 | `scenes/levels/wave_jump_lab.tscn` | 机制测试关 |
 | `scripts/wave_jump_lab.gd` | 测试关的 R、声场生成、噪音生存、鼠标传送 |
 | `scripts/player.gd` | 移动、跳跃、分级声场、`Terminal Fall Speed` 可调最大下落速度、危险倒计时贴图渐红（本体由 `player.tscn` 的 Sprite2D 显示） |
-| `scripts/sound_field.gd` | 声场视觉效果（中心扩散 + 淡出；lv2 使用 `LV2_LIFETIME = 2 秒`；生成时吸附 16px 网格；同色合并 + 黄>蓝>白等级覆盖） |
-| `scripts/world/spike_field.gd`、`scripts/actors/spike_monster.gd` | 刺格 → 刺怪生成器（四邻分组）与追击/推/定住/吃人行为；击退蓝色、定住黄色、目标死亡后停止/换目标 |
+| `scripts/sound_field.gd` | 声场视觉效果（中心扩散 + 淡出；`expand_duration = 0` 时直接满尺寸；lv2 使用 `LV2_LIFETIME = 2 秒`；生成时吸附 16px 网格；同色合并 + 黄>蓝>白等级覆盖；`never_covered` 场始终完整绘制；绘制前按相交预筛兄弟场，每帧只扫描一次） |
+| `scripts/world/spike_field.gd`、`scripts/actors/spike_monster.gd` | 刺格 → 刺怪生成器（四邻分组）与追击/推/定住/吃人行为；视觉为整组最外缘满尺寸外框闪烁；击退蓝色、定住黄色、目标死亡后停止/换目标；持续循环噪音按距离衰减 |
 | `scripts/world/trigger_field.gd` | 触发方块层：玩家站上去每 0.5 秒发一次白色 3 格声场 |
 | `scripts/world/barrier_field.gd` | 声场屏障层：未激活 20% 透明；被任意声场覆盖时完整显形挡人，1.2 秒后回到 20% |
 | `scripts/world/door.gd`、`scripts/world/door_field.gd`、`scenes/world/door.tscn` | 32×32 门陷阱与 16~48px 红色脉冲声场 |
@@ -199,7 +206,7 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 | `scripts/world/collectible.gd`、`scenes/world/collectible.tscn`、`assets/star.png` | 收集品星星：无碰撞、玩家接触即收集、缓慢旋转、纯视觉 2 格白色脉冲 |
 | `scripts/actors/animal.gd`、`scenes/actors/animal.tscn` | 受重力动物：lv1 驱赶、移动/静止发蓝色 lv1 声场、爬一格/过一格沟/换房刷新、叫声按玩家曼哈顿距离衰减 |
 | `scripts/breakables.gd` | 图格绘制转碰撞、同级声场震碎、按房间恢复 |
-| `scripts/noise_field.gd` | 红色绘制转噪音区域；格子中心在单个声场内即隐藏，身体矩形接触判定 |
+| `scripts/noise_field.gd` | 红色绘制转噪音区域；格子中心在单个声场内即隐藏，身体矩形接触判定；噪音格不播放音效 |
 | `scripts/audio/audio_manager.gd`、`scripts/audio/audio_settings.gd`、`resources/audio_settings.tres`、`default_bus_layout.tres` | 音频总控器：Master/Move/Die/Animal/Jump/Drop/Pickup/Glass/Noise/Button 总线，全部音量集中在检查器调 |
 | `resources/whitebox_tileset.tres` | 16×16、47 格黑白 blob 地形图集，含完整物理层 |
 | `resources/lv1_tileset.tres`、`lv2_tileset.tres`、`noise_tileset.tres`、`assets/tiles/noise_tile.png` | 玻璃与噪音瓦片集（噪音使用 PNG 贴图） |
@@ -214,7 +221,8 @@ Windows 启动器会检查 `GODOT_EXE` 环境变量、系统命令和桌面的 G
 用实际 Godot 引擎运行，无外部测试框架。将 `godot` 替换为本机引擎路径：
 
 ```powershell
-# 音频套件需要渲染窗口（不要加 --headless）
+# 音频套件需要渲染窗口（不要加 --headless）；改过 noise.wav 导入设置后先重导入
+godot --headless --path . --import
 godot --path . --script res://tests/audio_node_checks.gd
 godot --headless --path . --script res://tests/keyboard_movement_checks.gd
 godot --headless --path . --script res://tests/big_map_checks.gd
@@ -229,11 +237,11 @@ godot --headless --path . --script res://tests/sound_field_border_checks.gd
 ```
 
 - `keyboard_movement_checks.gd`：81 项，覆盖跳跃/起跳悬停、顶天花板 lv1/lv2（零净空）声场、贴墙发声场、声场等级/边长/颜色、声场 16px 网格吸附、lv2 2 秒寿命、最大下落速度限制、走路/撞墙、玻璃破碎与恢复、可调噪音冷却/身体接触/中心覆盖隐藏、调试传送。
-- `sound_field_border_checks.gd`：19 项，覆盖同色重叠合并为并集外轮廓、黄>蓝>白等级覆盖（被覆盖边消失）、颜色层级 z 序、红色不参与等级覆盖、同色贴边保留公共边、逻辑判定不变、不同父节点/不可见场不参与遮挡。
-- `big_map_checks.gd`：74 项，覆盖玩家可见贴图、Start Room 起始房间、房间、相机严格满屏、声场扩散、存档点接触激活后的持续 80px 声场（含渐隐渐显视觉）/旗子贴图、进房不自动绑定/接触才绑定存档点、死亡需按 R 且隐藏贴图并播放死亡音效、危险倒计时渐红、房间裁剪（仅当前房间 / Room3+Room4+Room5、Room6+Room8 联动）、跨房间刷新与联动组一起刷新、动物归位与被驱赶换房后的刷新点、Room3 动物刷新点改记 Room4 存档点旁。
-- `checkpoint_wave_checks.gd`：23 项，覆盖未激活无场、玩家接触后才发出一次持续场、唯一性/参数、3 秒不替换、不同相位死亡重开同步安全、`fields_enabled` 清场与重建、离开房间后场保持。
-- `spike_checks.gd`：28 项，覆盖刺层隐藏、四邻分组生成怪、三连红波视觉（默认 2 秒间隔）/判定仍按 tile、击退变蓝/定住变黄、无重力、追动物/移动玩家、近者优先、不跨房间、玩家 lv1 推开、lv2 定住、非玩家声场不推怪、目标死亡后停止/换目标、R 归位、接触吃玩家/动物、被吃动物 R 复活。
-- `audio_node_checks.gd`：33 项，覆盖动物/玩家音效节点、全部音频总线存在、各音源总线归属（Move/Die/Animal/Jump/Drop/Pickup/Noise/Glass/Button）、`AudioManager` 自动加载并把 `AudioSettings` 每一类（含 Master）写入总线、动物叫声按玩家曼哈顿距离衰减且 8 格静音、小跳/小顶头使用 `player_jump.wav`、大地图/测试关/按钮场景的音效路由；需要渲染窗口（不要加 `--headless`）。
+- `sound_field_border_checks.gd`：23 项，覆盖同色重叠合并为并集外轮廓、黄>蓝>白等级覆盖（被覆盖边消失）、颜色层级 z 序、红色不参与等级覆盖、同色贴边保留公共边、逻辑判定不变、不同父节点/不可见场/分离场不参与遮挡、`expand_duration = 0` 第一帧即满尺寸、`never_covered` 场不被同色场覆盖但仍覆盖别人。
+- `big_map_checks.gd`：77 项，覆盖玩家可见贴图、Start Room 起始房间、房间、相机严格满屏、声场扩散、存档点接触激活后的持续 80px 声场（含渐隐渐显视觉）/旗子贴图、进房不自动绑定/接触才绑定存档点、死亡需按 R 且隐藏贴图并播放死亡音效、Room2 R 提示初始隐藏/首次死亡后永久显示、危险倒计时渐红、房间裁剪（仅当前房间 / Room3+Room4+Room5、Room6+Room8 联动）、跨房间刷新与联动组一起刷新、动物归位与被驱赶换房后的刷新点、Room3 动物刷新点改记 Room4 存档点旁。
+- `checkpoint_wave_checks.gd`：25 项，覆盖未激活无场、玩家接触后才发出一次持续场、唯一性/参数、激活时播放一次拾取音效且重启不重播、3 秒不替换、不同相位死亡重开同步安全、`fields_enabled` 清场与重建、离开房间后场保持。
+- `spike_checks.gd`：43 项，覆盖刺层隐藏、四邻分组生成怪、每组只发 1 个满尺寸外框（组中心、无内部扩散、覆盖整组、永不被覆盖、自然闪烁时每怪最多 1 个）/判定仍按 tile、刺怪噪音节点/循环/8 格距离衰减/显式启停、击退变蓝/定住变黄（含状态切换即时补闪）、无重力、追动物/移动玩家、近者优先、不跨房间、玩家 lv1 推开、lv2 定住、非玩家声场不推怪、目标死亡后停止/换目标、R 归位、接触吃玩家/动物、被吃动物 R 复活。
+- `audio_node_checks.gd`：33 项，覆盖动物/玩家音效节点、全部音频总线存在、各音源总线归属（Move/Die/Animal/Jump/Drop/Pickup/Noise/Glass/Button）、`AudioManager` 自动加载并把 `AudioSettings` 每一类（含 Master）写入总线、动物叫声按玩家曼哈顿距离衰减且 8 格静音、小跳/小顶头使用 `player_jump.wav`、噪音格进入画面也不发声、大地图/测试关/按钮场景的音效路由；需要渲染窗口（不要加 `--headless`）。
 - `trigger_checks.gd`：7 项，覆盖触发格存在、站上去重复发白色 48px 声场、安全区、不碎玻璃、冷却。
 - `barrier_checks.gd`：8 项，覆盖屏障未激活 20% 透明、任意声场完整显形、物理层、阻挡玩家、声场结束 1.2 秒后回到 20%。
 - `door_animal_checks.gd`：26 项，覆盖门脉冲、红脉冲吃白声场主人、门随房间恢复、动物重力/贴图/蓝色 lv1 静止声场（停止后立即发）/lv1 驱赶/移动声场与时长扩散、lv2 震飞、平台边缘停住、一格深沟走过、爬一格台阶、归位、门吃动物。

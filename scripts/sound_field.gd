@@ -27,6 +27,8 @@ const LV2_LIFETIME := 2.0
 @export var level := 0
 ## 持久声场（门脉冲）：世界重置时不清理。
 @export var persistent := false
+## 为 true 时忽略其它声场的遮挡/合并，始终绘制完整边框（刺怪外缘闪烁用）。
+@export var never_covered := false
 ## 白声场的主人（玩家 / 动物）；门的红色脉冲用它在接触白声场时吃掉主人。
 var emitter: Node2D = null
 
@@ -69,9 +71,13 @@ static func snap_origin_to_grid(origin: Vector2, side: float) -> Vector2:
 
 func _physics_process(delta: float) -> void:
 	age += delta
-	var t := clampf(age / maxf(expand_duration, 0.001), 0.0, 1.0)
-	# ease-out：起步快、收尾缓
-	current_side = side_length * (1.0 - pow(1.0 - t, 3.0))
+	if expand_duration <= 0.0:
+		# 不扩散的声场（怪物外缘闪烁）直接满尺寸。
+		current_side = side_length
+	else:
+		var t := clampf(age / expand_duration, 0.0, 1.0)
+		# ease-out：起步快、收尾缓
+		current_side = side_length * (1.0 - pow(1.0 - t, 3.0))
 	if age >= lifetime:
 		queue_free()
 	else:
@@ -109,45 +115,54 @@ func _is_same_family(other: SoundField) -> bool:
 		and is_equal_approx(color.b, other.color.b)
 
 ## 同一父节点下、可见的同类兄弟声场矩形（收集品脉冲是子节点，不会参与）。
-func _occluders() -> Array[Rect2]:
+## 先按 `view_rect` 做相交预筛：不相交的场不可能切掉任何边段，跳过以免每次绘制全量扫描。
+func _occluders(view_rect: Rect2) -> Array[Rect2]:
 	var rects: Array[Rect2] = []
+	if never_covered:
+		return rects
 	var parent := get_parent()
 	if parent == null:
 		return rects
+	var self_rank := color_rank(color)
 	for child in parent.get_children():
 		if child == self or not child is SoundField:
 			continue
 		var other := child as SoundField
 		if other.is_queued_for_deletion() or not other.visible:
 			continue
+		var other_rect := other.drawn_world_rect()
+		if not view_rect.intersects(other_rect):
+			continue
 		# 同色合并；标准色之间按等级单向覆盖：黄 > 蓝 > 白。
-		var self_rank := color_rank(color)
-		var other_rank := color_rank(other.color)
-		var covers := _is_same_family(other) or (self_rank >= 0 and other_rank > self_rank)
+		var covers := _is_same_family(other)
+		if not covers and self_rank >= 0:
+			covers = color_rank(other.color) > self_rank
 		if covers:
-			rects.append(other.drawn_world_rect())
+			rects.append(other_rect)
 	return rects
 
 ## 当前可见的边界分段（世界坐标、厚度 line_width）；同类重叠处的内部边段已去掉。
 func visible_border_rects() -> Array[Rect2]:
 	var rect := drawn_world_rect()
+	var occluders := _occluders(rect)
 	var w := maxf(1.0, line_width)
 	var out: Array[Rect2] = []
-	for span in _visible_spans(rect.position.x, rect.end.x, rect.position.y, true):
+	for span in _visible_spans(rect.position.x, rect.end.x, rect.position.y, true, occluders):
 		out.append(Rect2(span.x, rect.position.y - w * 0.5, span.y - span.x, w))
-	for span in _visible_spans(rect.position.x, rect.end.x, rect.end.y, true):
+	for span in _visible_spans(rect.position.x, rect.end.x, rect.end.y, true, occluders):
 		out.append(Rect2(span.x, rect.end.y - w * 0.5, span.y - span.x, w))
-	for span in _visible_spans(rect.position.y, rect.end.y, rect.position.x, false):
+	for span in _visible_spans(rect.position.y, rect.end.y, rect.position.x, false, occluders):
 		out.append(Rect2(rect.position.x - w * 0.5, span.x, w, span.y - span.x))
-	for span in _visible_spans(rect.position.y, rect.end.y, rect.end.x, false):
+	for span in _visible_spans(rect.position.y, rect.end.y, rect.end.x, false, occluders):
 		out.append(Rect2(rect.end.x - w * 0.5, span.x, w, span.y - span.x))
 	return out
 
 ## 沿一条边计算未被同类矩形遮住的区间；fixed 是边线另一轴的坐标。
 ## 只有边线严格落在对方内部才遮挡：共享边/贴边不算重叠，公共边保留。
-func _visible_spans(edge_start: float, edge_end: float, fixed: float, horizontal: bool) -> Array[Vector2]:
+func _visible_spans(edge_start: float, edge_end: float, fixed: float, horizontal: bool,
+		occluders: Array[Rect2]) -> Array[Vector2]:
 	var cuts: Array[Vector2] = []
-	for r in _occluders():
+	for r in occluders:
 		var a := 0.0
 		var b := 0.0
 		if horizontal:

@@ -72,12 +72,6 @@ var _monster_base_volume_db: float = 0.0
 ## 两轮红色短声场之间的间隔。
 @export var monster_visual_cycle_interval := 2.0
 
-## 单轮连发之间的间隔。
-@export var monster_visual_burst_interval := 0.1
-
-## 每轮连发数量。
-@export var monster_visual_burst_count := 3
-
 ## 红色短声场边长（格）。
 @export var monster_visual_side_cells := 3.0
 
@@ -87,6 +81,10 @@ var _monster_base_volume_db: float = 0.0
 @export var monster_visual_color := Color(
 	1.0, 0.2, 0.2, 1.0
 )
+## 被玩家 lv1 波击退期间的颜色（蓝色）。
+@export var monster_visual_push_color := Color(0.3, 0.65, 1.0, 1.0)
+## 被玩家 lv2 波定住期间的颜色（黄色）。
+@export var monster_visual_freeze_color := Color(1.0, 0.9, 0.2, 1.0)
 
 
 # ==============================
@@ -241,16 +239,6 @@ func _spawn_monsters() -> void:
 		)
 
 		monster.set(
-			"visual_burst_interval",
-			monster_visual_burst_interval
-		)
-
-		monster.set(
-			"visual_burst_count",
-			monster_visual_burst_count
-		)
-
-		monster.set(
 			"visual_side_cells",
 			monster_visual_side_cells
 		)
@@ -263,6 +251,16 @@ func _spawn_monsters() -> void:
 		monster.set(
 			"visual_color",
 			monster_visual_color
+		)
+
+		monster.set(
+			"visual_push_color",
+			monster_visual_push_color
+		)
+
+		monster.set(
+			"visual_freeze_color",
+			monster_visual_freeze_color
 		)
 
 		root.add_child(monster)

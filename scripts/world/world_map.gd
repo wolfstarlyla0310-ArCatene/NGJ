@@ -32,6 +32,8 @@ const ANIMAL_REDIRECT_OFFSET := Vector2(48, 0)
 @onready var rooms_root: Node2D = $Rooms
 @onready var room_camera: RoomCameraController = $RoomCamera
 @onready var puzzle_door_manager: PuzzleDoorManager = get_node_or_null("DoorManager") as PuzzleDoorManager
+## Room2 的 R 键提示：初始隐藏，第一次死亡后永久显示。
+@onready var r_hint: Sprite2D = get_node_or_null("Node2D/R") as Sprite2D
 
 var deaths := 0
 
@@ -49,6 +51,8 @@ func _ready() -> void:
 	process_physics_priority = 100
 	_grace_remaining = noise_grace_seconds
 	add_to_group("world_map")
+	if r_hint != null:
+		r_hint.visible = false
 	player.wave_emitted.connect(_on_wave)
 	player.controls_enabled = true
 	_collect_checkpoints()
@@ -281,6 +285,9 @@ func _die() -> void:
 		return
 	_dead = true
 	deaths += 1
+	# 第一次死亡后永久显示 R 键提示（复活也不隐藏）。
+	if r_hint != null:
+		r_hint.visible = true
 	player.play_death_sound()
 	player.controls_enabled = false
 	player.velocity = Vector2.ZERO
@@ -344,6 +351,9 @@ func _update_room_culling(force := false) -> void:
 			var area := node as Area2D
 			if area != null:
 				area.set_deferred("monitoring", active)
+		# 被裁剪的怪 process_mode 会停，但音频不会停；显式启停怪物噪音。
+		if node.is_in_group("spike_monster") and node.has_method("set_audio_active"):
+			node.call("set_audio_active", active)
 
 func _collect_managed_nodes(node: Node, out: Array[Node]) -> void:
 	for child in node.get_children():

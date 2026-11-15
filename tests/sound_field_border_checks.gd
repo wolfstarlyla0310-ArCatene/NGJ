@@ -124,7 +124,39 @@ func _run() -> void:
 	hidden8.visible = false
 	check(visible8.visible_border_rects().size() == 4, "Hidden same-color field does not occlude")
 
-	for container in [c1, c2, c3, c4, c4b, c5, c6, c7a, c7b, c8]:
+	# 9. 零扩散声场（怪物外缘闪烁）第一帧就是满尺寸。
+	var c9 := _container()
+	var instant := SoundField.new()
+	instant.side_length = 40.0
+	instant.expand_duration = 0.0
+	instant.lifetime = INF
+	instant.color = Color(1.0, 0.2, 0.2, 1.0)
+	c9.add_child(instant)
+	instant.global_position = Vector2(0, 0)
+	# physics_frame 在 _physics_process 之前触发，等两帧确保节点已处理。
+	await physics_frame
+	await physics_frame
+	check(absf(instant.current_side - 40.0) < 0.01,
+		"Zero-expand field is full size on the first physics frame")
+
+	# 10. 完全分离的同色场互不遮挡（相交预筛路径）。
+	var c10 := _container()
+	var low10 := _make_field(c10, Vector2(0, 0), 64.0, white)
+	var far10 := _make_field(c10, Vector2(0, 100), 64.0, white)
+	check(low10.visible_border_rects().size() == 4 and far10.visible_border_rects().size() == 4,
+		"Separated same-color fields keep all four edges")
+
+	# 11. 标记 never_covered 的场（怪物外框）不被同色场覆盖，但仍会覆盖别人。
+	var c11 := _container()
+	var immune := _make_field(c11, Vector2(0, 0), 64.0, red)
+	immune.never_covered = true
+	var normal11 := _make_field(c11, Vector2(24, 24), 64.0, red)
+	check(immune.visible_border_rects().size() == 4,
+		"Never-covered field keeps all four edges despite same-color overlap")
+	check(_pieces_inside(normal11, immune) == 0,
+		"Normal same-color field is still covered by the never-covered field")
+
+	for container in [c1, c2, c3, c4, c4b, c5, c6, c7a, c7b, c8, c9, c10, c11]:
 		container.queue_free()
 	await process_frame
 	print("\nSound field border checks: ", "ALL PASSED" if failures.is_empty() else "%d FAILED" % failures.size())

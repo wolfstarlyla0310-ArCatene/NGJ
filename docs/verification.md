@@ -1,5 +1,44 @@
 # 验证记录
 
+2026-11-15（噪音格彻底静音）
+
+- `noise_field.gd`：删除上次的 `startup_audio_guard_frames` / `_process` 守卫与播放逻辑；`_ready()` 主动 `stop()` 场景里的 `NoiseSound`，`screen_entered` 处理器改为空操作，`screen_exited` 仅确保停止。噪音格现在只负责区域 / 隐藏 / 致命判定，不再发出任何声音；场景节点与 `Noise` 总线保持不变以免破坏引用。刺怪的持续噪音直接使用 `noise.wav` 流，不受影响（导入仍为向前循环）。
+- 测试：`audio_node_checks` 34 → **33**（删除守卫两段检查与地图循环断言，新增「进入画面也不发声」与「地图噪音静音」）。
+- 本机结果：`audio_node_checks`（窗口）**33 全过**；`big_map` / `spike` / `keyboard` 回归全过。
+
+2026-11-15（R 提示 / 开局噪音抑制 / 刺怪持续噪音 / 存档点拾取音）
+
+- `world_map.gd`：新增 `r_hint = Node2D/R`；`_ready()` 隐藏，`_die()` 显示。因此 Room2 的 R 键提示初始不可见，玩家**第一次死亡后永久显示**（`reset_to_checkpoint()` 不隐藏）。
+- `noise_field.gd`：新增 `startup_audio_guard_frames`（默认 2 个 process 帧）与 `_audio_guard_remaining`。开局相机从地图原点 snap 到起始房间之前，`VisibleOnScreenNotifier2D` 会误判在屏；守卫期间忽略 `screen_entered`，守卫结束若 `is_on_screen()` 仍为真再播放。抽出 `_play_noise_sound()` / `_stop_noise_sound()` / `_resume_noise_if_visible()`。
+- `spike_monster.gd`：`setup()` 创建 `MonsterSound`（`res://assets/sound/noise.wav`、`Noise` 总线、`max_polyphony = 1`）；`_physics_process()` 每帧按玩家与怪的曼哈顿距离设置音量，`audible_range_cells`（默认 8 格 / 128px）外停止；新增 `set_audio_active(active)`，`reset_home()` 停止音频。
+- `world_map._update_room_culling()`：在切换 `spike_monster` 的 monitoring 时同时调用 `set_audio_active(active)`，防止被裁剪的怪继续发声。
+- `assets/sound/noise.wav.import`：`edit/loop_mode=0`（Detect）→ **2（Forward）**，`loop_begin=0`、`loop_end=-1`；已执行 `godot --headless --path . --import`。地图 `NoiseSound` 也随之循环。
+- `checkpoint.gd`：激活音效使用一次性根节点 `AudioStreamPlayer`（`assets/sound/PickUP/pickup.mp3`、`Pickup` 总线），只在 `set_active` 的 false→true 转换时调用；`@tool` 编辑器路径用 `Engine.is_editor_hint()` 跳过，`restart_wave()` 不触发。
+- 测试：`big_map_checks` 74 → **77**（R 提示初始隐藏/死亡后显示/复活后保留）；`checkpoint_wave_checks` 23 → **25**（激活播放一次拾取音、重启不重播）；`spike_checks` 35 → **43**（噪音节点/循环/距离衰减/8 格静音/显式启停；原 `get_child_count()==2` 改为只数 CollisionShape2D）；`audio_node_checks` 33 → **34**（开局守卫两段检查 + 噪音循环导入）。
+- 本机结果：`big_map_checks` **77 全过**、`checkpoint_wave_checks` **25 全过**、`spike_checks` **43 全过**、`audio_node_checks`（窗口）**34 全过**；`door_animal` / `collectible` / `barrier` / `button_door` / `trigger` / `sound_field_border` / `keyboard` 全部通过。
+
+2026-11-15（按指定数值调整全部音量）
+
+- `resources/audio_settings.tres` + `scripts/audio/audio_settings.gd` 默认值：Master **0**、Move **-7**、Die **-4**、Animal **-11**、Jump **0**、Drop **-6**、Pickup **0**、Glass **-8**、Noise **0**、Button **-2**（dB）。`AudioManager` 启动时逐类别写入对应总线。
+- `default_bus_layout.tres` 同步为相同数值，作为自动加载前的初始总线音量。
+- 测试：`audio_node_checks` 窗口运行 **33 全过**（逐类别校验总线音量与 `AudioSettings` 一致，含 Master）。
+
+2026-11-15（怪物声场永不被覆盖）
+
+- `scripts/sound_field.gd`：新增导出 `never_covered`；`_occluders(view_rect)` 在该标志为 true 时直接返回空列表，即该场绘制时不减法任何兄弟声场（同色/异色都忽略），始终画完整四边。
+- `scripts/actors/spike_monster.gd`：`_spawn_visual_pulse()` 生成的怪物外框设置 `never_covered = true`。其它声场仍把怪物外框当作遮挡源，因此怪物可以覆盖别人，但自己永远完整；只影响绘制，`get_rect()` / `contains_point()` / 安全、致命、门等判定不变。
+- 测试：`sound_field_border_checks` 21 → **23**（`never_covered` 同色重叠仍 4 边、普通同色场仍被它覆盖）；`spike_checks` 34 → **35**（怪物外框带 `never_covered`）。
+- 本机结果：`sound_field_border_checks` **23 全过**、`spike_checks` **35 全过**；`big_map` / `barrier` / `door_animal` / `checkpoint_wave` / `collectible` / `button_door` 全部通过。
+
+2026-11-15（刺怪外缘闪烁 + 声场绘制性能优化）
+
+- 卡顿原因：`spike_monster.gd` 每轮 3 次爆发、每次**按刺格逐格**生成 `SoundField`，大地图 6 只怪 × 4 格 ≈ 每轮 18 个，`big_map` 又把周期覆盖成 0.2 秒导致常驻 30+ 个；`sound_field.gd` 的 `_occluders()` 每次绘制**四条边各扫一遍全部兄弟声场**（约 O(4N²)），逐格怪物场互相重叠是最坏情况。
+- `scripts/actors/spike_monster.gd`：删除 `visual_burst_count` / `visual_burst_interval` 与连发状态；`_emit_visual()` 改为按 `visual_cycle_interval` 每轮只调用一次 `_spawn_visual_pulse()`。新脉冲**每组只生成 1 个** `SoundField`，位于组中心 `global_position`，边长 `visual_side_length() = 组最长边 + (visual_side_cells - 1) × 16`（即旧版逐格 40px 并集的最外缘：单格 40、2×2 组 56），`expand_duration = 0`、`current_side = side_length`，立即满尺寸后按 `visual_lifetime` 淡出。击中/接触判定、碰撞形状不变。`_state_color` 优先级不变（定住黄 > 击退蓝 > 默认红），新增 `_emitted_state`：状态切换时立即补闪一次，保证 0.25 秒的击退/定住一定能看到蓝/黄。`reset_home()` 重置计时与状态色。
+- `scripts/sound_field.gd`：`_physics_process()` 增加 `expand_duration <= 0` 分支（直接满尺寸）；`_occluders(view_rect)` 增加**相交预筛**（与自身绘制矩形不相交的兄弟场不可能切掉边段，直接跳过），`color_rank(self)` 提到循环外；`visible_border_rects()` 改为**先算一次遮挡列表**再传给四条边，不再每条边全量扫描。合并/覆盖/贴边语义不变（`Rect2.intersects` 不含仅贴边，原本也不会切段）。
+- `scripts/world/spike_field.gd`：删除 `monster_visual_burst_interval` / `monster_visual_burst_count` 导出与传参，其余视觉参数保留。`big_map.tscn` 的 `Spikes` 改为 `monster_visual_cycle_interval = 0.4`、`monster_visual_lifetime = 0.15`（快速闪烁）、`monster_visual_side_cells = 2.5`。大地图怪物外框稳态 ≤6 个，取代原先 30+ 个。
+- 测试：`sound_field_border_checks` 19 → **21**（零扩散第一帧满尺寸、完全分离同色场互不遮挡）；`spike_checks` 28 → **34**（每组只发 1 个外框、位于组中心、无内部扩散、覆盖整组、单格 40 / 双格 56、自然闪烁每怪最多 1 个、蓝/黄状态切换即时闪）。清理逻辑改为按 `level 0 + 非安全 + 非持久 + 颜色` 匹配，不再使用写死的 48px。
+- 本机结果：`sound_field_border_checks` **21 全过**、`spike_checks` **34 全过**；`big_map` / `barrier` / `door_animal` / `checkpoint_wave` / `collectible` / `trigger` / `button_door` / `keyboard` 全部通过。
+
 2026-11-15（修复玩家死亡音效不播放）
 
 - `world_map.gd`：`_die()`（噪音致死与刺怪接触共用）此前只隐藏玩家、生成红色死亡声场，**从未调用 `player.play_death_sound()`**，所以正式大地图里死亡没有声音（测试关 `wave_jump_lab.gd` 一直有调用）。现在 `_die()` 在隐藏玩家前调用 `player.play_death_sound()`；该函数在 `get_tree().root` 下创建一次性 `AudioStreamPlayer`（继承 DieSound 的 stream/音量/pitch/bus），玩家隐藏或重置都不会截断音效。

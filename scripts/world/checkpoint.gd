@@ -11,6 +11,8 @@ const FIELD_EXPAND_DURATION := 0.5
 const FLAG_CLOSE := preload("res://assets/flag_close.png")
 const FLAG_OPEN := preload("res://assets/flag_open.png")
 const IDLE_ALPHA := 0.8
+## 激活存档点时播放一次星星收集品音效。
+const ACTIVATE_STREAM: AudioStream = preload("res://assets/sound/PickUP/pickup.mp3")
 
 @export var respawn_offset := Vector2.ZERO
 
@@ -34,7 +36,6 @@ var _current_field: SoundField = null
 var _field_fade_elapsed := 0.0
 
 @onready var _sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
-@onready var checkpoint_audio: AudioStreamPlayer = get_node_or_null("CheckpointSound") as AudioStreamPlayer
 
 func _ready() -> void:
 	collision_layer = 0
@@ -113,18 +114,26 @@ func _on_body_entered(body: Node2D) -> void:
 func set_active(value: bool) -> void:
 	if value == _active:
 		return
-
 	var first_activation := value and not _field_activated
-
 	_active = value
 	_refresh_visual()
-
 	if value:
+		# 玩家激活：发出一次安全场，之后一直保持（换绑/离开房间都不删除）。
 		_field_activated = true
+		if first_activation:
+			_play_activate_sound()
 		_ensure_field()
 
-		if first_activation and checkpoint_audio != null and checkpoint_audio.stream != null:
-			checkpoint_audio.play()
+## 只在 set_active 的 false→true 转换时调用，restart_wave/重生不会重播。
+func _play_activate_sound() -> void:
+	if Engine.is_editor_hint():
+		return
+	var audio := AudioStreamPlayer.new()
+	audio.stream = ACTIVATE_STREAM
+	audio.bus = &"Pickup"
+	get_tree().root.add_child(audio)
+	audio.finished.connect(audio.queue_free, CONNECT_ONE_SHOT)
+	audio.play()
 
 func is_active() -> bool:
 	return _active

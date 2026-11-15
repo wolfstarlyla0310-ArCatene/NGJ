@@ -5,21 +5,19 @@ extends Area2D
 ## 接触玩家触发死亡，接触动物把动物吃掉。
 
 const TILE_SIZE := 16.0
+const NOISE_STREAM: AudioStream = preload("res://assets/sound/noise.wav")
+const MONSTER_SOUND_NAME := &"MonsterSound"
 
 @export var move_speed := 40.0
 @export var push_speed := 220.0
 @export var push_duration := 0.25
 
 @export_group("视觉声场")
-## 每轮连发的红色短声场边长（格）。
+## 单格怪外框边长（格）。多格怪取组最长边 + (该值 - 1) 格，即旧版逐格并集的最外缘。
 @export var visual_side_cells := 3.0
-## 单个视觉声场寿命（秒）。
+## 外框淡出寿命（秒），应小于 visual_cycle_interval。
 @export var visual_lifetime := 0.2
-## 每轮连发数量。
-@export var visual_burst_count := 3
-## 连发间隔（秒）。
-@export var visual_burst_interval := 0.1
-## 两轮之间的间隔（秒）。
+## 两次外缘闪烁之间的间隔（秒）。
 @export var visual_cycle_interval := 2.0
 @export var visual_color := Color(1.0, 0.2, 0.2, 1.0)
 ## 被玩家 lv1 波击退期间的视觉颜色（蓝色）。
@@ -27,8 +25,13 @@ const TILE_SIZE := 16.0
 ## 被玩家 lv2 波定住期间的视觉颜色（黄色）。
 @export var visual_freeze_color := Color(1.0, 0.9, 0.2, 1.0)
 
+@export_group("音频")
+## 玩家与刺怪的曼哈顿距离超过这么多格时停止噪音。
+@export var audible_range_cells := 8.0
+
 var sound_fields: Node2D = null
 var _state_color := Color(1.0, 0.2, 0.2, 1.0)
+var _emitted_state := Color(1.0, 0.2, 0.2, 1.0)
 
 var _offsets: Array[Vector2] = []
 var _bounds_size := Vector2(TILE_SIZE, TILE_SIZE)
@@ -41,8 +44,9 @@ var _rooms: Array = []
 var _room: Room = null
 var _room_resolved := false
 var _cycle_elapsed := 0.0
-var _burst_left := 0
-var _burst_timer := 0.0
+var _noise_audio: AudioStreamPlayer = null
+var _audio_active := true
+var _player_node: Node2D = null
 
 func setup(world_center: Vector2, offsets: Array[Vector2], bounds_size: Vector2) -> void:
 	global_position = world_center
@@ -50,6 +54,8 @@ func setup(world_center: Vector2, offsets: Array[Vector2], bounds_size: Vector2)
 	_offsets = offsets
 	_bounds_size = bounds_size
 	_state_color = visual_color  # 读到场景/SpikeField 的覆盖值。
+	_emitted_state = visual_color
+	_cycle_elapsed = 0.0
 	collision_layer = 0
 	collision_mask = 6  # 玩家层 2 + 动物层 4
 	monitorable = false
@@ -62,12 +68,14 @@ func setup(world_center: Vector2, offsets: Array[Vector2], bounds_size: Vector2)
 		shape.shape = rect
 		shape.position = offset
 		add_child(shape)
+	_setup_audio()
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
 	_resolve_room()
+	_update_noise_audio()
 	var bounds := _bounds()
 	var frozen := _overlaps_level(2, bounds)
 	# 视觉颜色：定住（黄）优先于击退（蓝）优先于默认红。
@@ -77,6 +85,11 @@ func _physics_process(delta: float) -> void:
 		_state_color = visual_push_color
 	else:
 		_state_color = visual_color
+	# 击退 0.25 秒可能短于闪烁周期：状态切换时立即补闪一次，保证蓝/黄可见。
+	if not _state_color.is_equal_approx(_emitted_state):
+		_emitted_state = _state_color
+		_cycle_elapsed = 0.0
+		_spawn_visual_pulse()
 	_emit_visual(delta)
 	# lv2：定住，不推走。
 	if frozen:
@@ -101,39 +114,90 @@ func reset_home() -> void:
 	_velocity = Vector2.ZERO
 	_push_remaining = 0.0
 	_last_lv1 = null
+	_cycle_elapsed = 0.0
+	_state_color = visual_color
+	_emitted_state = visual_color
+	_stop_noise_audio()
 
 func home_position() -> Vector2:
 	return _home
 
-## 沿用旧 spike 的“间歇三连红色短声场”作为纯视觉；命中判定仍是每格 16×16。
-func _emit_visual(delta: float) -> void:
-	if _burst_left > 0:
-		_burst_timer -= delta
-		if _burst_timer <= 0.0:
-			_spawn_visual_burst()
-			_burst_left -= 1
-			_burst_timer = visual_burst_interval
-	_cycle_elapsed += delta
-	if _cycle_elapsed >= visual_cycle_interval and _burst_left == 0:
-		_cycle_elapsed = 0.0
-		_burst_left = visual_burst_count
-		_burst_timer = 0.0
+func _setup_audio() -> void:
+	_noise_audio = get_node_or_null(String(MONSTER_SOUND_NAME)) as AudioStreamPlayer
+	if _noise_audio != null:
+		return
+	_noise_audio = AudioStreamPlayer.new()
+	_noise_audio.name = MONSTER_SOUND_NAME
+	_noise_audio.stream = NOISE_STREAM
+	_noise_audio.bus = &"Noise"
+	_noise_audio.max_polyphony = 1
+	add_child(_noise_audio)
 
-func _spawn_visual_burst() -> void:
+## 房间裁剪会停掉 _physics_process 但不会停音频，需要显式启停。
+func set_audio_active(active: bool) -> void:
+	_audio_active = active
+	if active:
+		_update_noise_audio()
+	else:
+		_stop_noise_audio()
+
+## 持续播放噪音；音量按玩家与刺怪的曼哈顿距离线性衰减，audible_range_cells 格外停止。
+func _update_noise_audio() -> void:
+	if _noise_audio == null or not _audio_active:
+		return
+	if _player_node == null or not is_instance_valid(_player_node):
+		_player_node = get_tree().get_first_node_in_group("player") as Node2D
+	if _player_node == null:
+		_stop_noise_audio()
+		return
+	var range_cells := maxf(audible_range_cells, 0.001)
+	var distance_px := absf(global_position.x - _player_node.global_position.x) \
+		+ absf(global_position.y - _player_node.global_position.y)
+	var distance_cells := distance_px / TILE_SIZE
+	if distance_cells >= range_cells:
+		_stop_noise_audio()
+		return
+	var volume_t := 1.0 - distance_cells / range_cells
+	_noise_audio.volume_db = maxf(linear_to_db(volume_t), -80.0)
+	if not _noise_audio.playing:
+		_noise_audio.play()
+
+func _stop_noise_audio() -> void:
+	if _noise_audio != null and _noise_audio.playing:
+		_noise_audio.stop()
+
+## 每轮只在整组最外缘闪一次满尺寸外框；不再从怪物内部逐格发射。命中判定仍是每格 16×16。
+func _emit_visual(delta: float) -> void:
+	_cycle_elapsed += delta
+	var interval := maxf(visual_cycle_interval, 0.01)
+	if _cycle_elapsed >= interval:
+		_cycle_elapsed = fmod(_cycle_elapsed, interval)
+		_spawn_visual_pulse()
+
+## 旧版逐格脉冲并集的最外缘：组最长边 + (visual_side_cells - 1) 格。
+func visual_side_length() -> float:
+	var max_dim := maxf(_bounds_size.x, _bounds_size.y)
+	return max_dim + maxf(visual_side_cells - 1.0, 0.0) * TILE_SIZE
+
+func _spawn_visual_pulse() -> void:
 	var fields := _fields()
 	if fields == null:
 		return
-	var side := visual_side_cells * TILE_SIZE
-	for offset in _offsets:
-		var field := SoundField.new()
-		field.side_length = side
-		field.lifetime = visual_lifetime
-		field.level = 0
-		field.lethal = false
-		field.safe_for_player = false
-		field.color = _state_color
-		fields.add_child(field)
-		field.global_position = global_position + offset
+	var side := visual_side_length()
+	var field := SoundField.new()
+	field.side_length = side
+	field.lifetime = visual_lifetime
+	field.expand_duration = 0.0
+	field.current_side = side
+	field.level = 0
+	field.lethal = false
+	field.safe_for_player = false
+	# 怪物外框永远完整显示：不参与同色并集合并，也不被其它声场遮掉边段。
+	field.never_covered = true
+	field.color = _state_color
+	fields.add_child(field)
+	field.global_position = global_position
+	field.queue_redraw()
 
 func _resolve_room() -> void:
 	if _room_resolved:

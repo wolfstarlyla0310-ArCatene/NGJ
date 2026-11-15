@@ -37,6 +37,9 @@ func _run() -> void:
 	current_scene = level
 	await frames(2)
 
+	var r_hint := level.get_node_or_null("Node2D/R") as Sprite2D
+	check(r_hint != null and not r_hint.visible, "Room2 R hint starts hidden")
+
 	# 1. 玩家本体由 Sprite2D 贴图显示。
 	var sprite: Sprite2D = level.player.get_node_or_null("Sprite2D")
 	var has_sprite := sprite != null and sprite.texture != null and sprite.visible
@@ -228,6 +231,7 @@ func _run() -> void:
 	check(level.deaths > deaths_before, "Standing in noise without a sound field kills the player")
 	check(level.is_dead(), "Noise death waits for R before resetting")
 	check(not level.player.visible, "Player is hidden on death")
+	check(r_hint != null and r_hint.visible, "R hint appears after the first death")
 	var die_stream: AudioStream = level.player.die_audio.stream if level.player.die_audio != null else null
 	var death_sound_played := false
 	for child in root.get_children():
@@ -247,6 +251,7 @@ func _run() -> void:
 	check(level.player.visible, "R shows the player again")
 	check(level.player.global_position.distance_to(level.get_checkpoint_anchor()) < 40.0,
 		"R respawns at the checkpoint")
+	check(r_hint != null and r_hint.visible, "R hint stays visible after reviving")
 	check(level.breakables.has_cell(1, c2), "R restores the checkpoint room's glass")
 
 	# 6. 房间裁剪：只处理玩家当前房间（Room3/Room4/Room5 联动）。

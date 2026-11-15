@@ -4,4 +4,4 @@
 
 [resource]
 script = ExtResource("1_script")
-die_db = 6.0
+move_db = -11.0

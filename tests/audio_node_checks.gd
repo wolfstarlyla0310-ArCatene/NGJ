@@ -61,6 +61,18 @@ func _run() -> void:
 	check(legacy._animal_audio == null and legacy._screen_notifier == null,
 		"Legacy animal without audio children processes safely")
 
+	# noise tile 不再发声：即使进入画面也不播放。
+	var silent_field := NoiseField.new()
+	var silent_audio := AudioStreamPlayer.new()
+	silent_audio.name = "NoiseSound"
+	silent_audio.stream = load("res://assets/sound/noise.wav")
+	silent_field.add_child(silent_audio)
+	fixture.add_child(silent_field)
+	silent_field._on_visible_on_screen_notifier_2d_screen_entered()
+	await rendered_frames(3)
+	check(not silent_audio.playing, "Noise tiles stay silent when entering the screen")
+	silent_field.queue_free()
+
 	var player: EchoPlayer = load("res://scenes/actors/player.tscn").instantiate()
 	fixture.add_child(player)
 	check(player.move_audio != null and player.move_audio.stream != null
@@ -148,6 +160,7 @@ func _run() -> void:
 	var noise_audio := map.get_node_or_null("Noise/NoiseSound") as AudioStreamPlayer
 	var map_glass := map.get_node_or_null("Breakables/GlassBreakingSound") as AudioStreamPlayer
 	check(noise_audio != null and noise_audio.bus == &"Noise", "Noise cue routes to the Noise bus")
+	check(noise_audio != null and not noise_audio.playing, "Map noise cue stays silent")
 	check(map_glass != null and map_glass.bus == &"Glass", "Map glass breakage routes to the Glass bus")
 	map.queue_free()
 	await process_frame

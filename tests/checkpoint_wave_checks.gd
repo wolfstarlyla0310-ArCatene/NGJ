@@ -17,6 +17,14 @@ func frames(count: int) -> void:
 	for _i in range(count):
 		await physics_frame
 
+func _pickup_players(root: Window, stream: AudioStream) -> Array[AudioStreamPlayer]:
+	var out: Array[AudioStreamPlayer] = []
+	for child in root.get_children():
+		var audio := child as AudioStreamPlayer
+		if audio != null and audio.stream == stream:
+			out.append(audio)
+	return out
+
 func _run() -> void:
 	var world: Node2D = load("res://scenes/world/big_map.tscn").instantiate()
 	world.get_node("DoorManager").log_doors = false
@@ -57,6 +65,19 @@ func _run() -> void:
 		check(field.contains_point(cp.respawn_position()), "Field covers the checkpoint respawn point")
 	check(_count_fields_at(world, cp.respawn_position()) == 1,
 		"Activated checkpoint has exactly one field")
+
+	# 激活时播放一次星星收集品音效；重启安全场不会重播。
+	var pickup_stream: AudioStream = load("res://assets/sound/PickUP/pickup.mp3")
+	var pickup_players := _pickup_players(root, pickup_stream)
+	check(pickup_players.size() == 1 and pickup_players[0].playing,
+		"Checkpoint activation plays the star pickup sound once")
+	world._restart_checkpoint_waves()
+	await frames(1)
+	check(_pickup_players(root, pickup_stream).size() == 1,
+		"Restarting checkpoint waves does not replay the pickup sound")
+	for audio in pickup_players:
+		audio.stop()
+		audio.queue_free()
 
 	var field_id: int = field.get_instance_id() if field != null else 0
 	var safe := true

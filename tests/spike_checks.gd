@@ -59,7 +59,11 @@ func _run() -> void:
 	if pair_monster == null or single_a == null or single_b == null:
 		quit(1)
 		return
-	check(pair_monster.get_child_count() == 2, "A two-cell spike group becomes one two-cell monster")
+	var pair_shapes := 0
+	for child in pair_monster.get_children():
+		if child is CollisionShape2D:
+			pair_shapes += 1
+	check(pair_shapes == 2, "A two-cell spike group becomes one two-cell monster")
 	var scripted := SpikeField.new()
 	var default_interval: float = scripted.monster_visual_cycle_interval
 	scripted.free()
@@ -68,38 +72,91 @@ func _run() -> void:
 	check(is_equal_approx(default_interval, 2.0), "Monster blink interval defaults to 2 seconds")
 	check(is_equal_approx(monster_interval, configured_interval),
 		"Monsters use the Spikes node's blink interval")
-	for monster in monsters:
-		monster.visual_cycle_interval = 0.05
-		monster.visual_burst_interval = 0.05
-		monster.visual_lifetime = 5.0
-	await frames(30)
+
+	# 0. 刺怪噪音：持续播放、曼哈顿距离衰减、8 格静音、显式启停。
+	var monster_audio := pair_monster.get_node_or_null("MonsterSound") as AudioStreamPlayer
+	check(monster_audio != null and monster_audio.stream != null \
+		and monster_audio.stream.resource_path == "res://assets/sound/noise.wav",
+		"Monster includes the shared noise audio stream")
+	check(monster_audio != null and monster_audio.bus == &"Noise",
+		"Monster noise routes to the Noise bus")
+	check(monster_audio != null and monster_audio.stream is AudioStreamWAV \
+		and (monster_audio.stream as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_FORWARD,
+		"Monster noise loops forward")
+	var pair_pos: Vector2 = pair_monster.global_position
+	level.player.reset_to(pair_pos + Vector2(-32, 0))
+	await frames(3)
+	check(monster_audio != null and monster_audio.playing,
+		"Monster noise plays when the player is within range")
+	level.player.reset_to(pair_pos + Vector2(-64, 0))
+	await frames(3)
+	check(monster_audio != null and absf(monster_audio.volume_db - linear_to_db(0.5)) < 0.6,
+		"Monster noise volume follows Manhattan distance")
+	level.player.reset_to(pair_pos + Vector2(-128, 0))
+	await frames(3)
+	check(monster_audio != null and not monster_audio.playing,
+		"Monster noise stops at 8 cells")
+	level.player.reset_to(pair_pos + Vector2(-32, 0))
+	await frames(3)
+	pair_monster.set_audio_active(false)
+	check(monster_audio != null and not monster_audio.playing,
+		"Deactivating monster audio stops playback")
+	pair_monster.set_audio_active(true)
+	check(monster_audio != null and monster_audio.playing,
+		"Reactivating monster audio resumes playback")
+	level.reset_to_checkpoint()
+	await frames(3)
+
 	var field_root: Node2D = level.get_node("SoundFields")
-	var visual_side: float = float(pair_monster.get("visual_side_cells")) * 16.0
-	var red_pulses := 0
-	for child in field_root.get_children():
-		if child is SoundField and child.level == 0 and not child.safe_for_player \
-				and absf(child.side_length - visual_side) < 0.01:
-			red_pulses += 1
-	check(red_pulses >= 3, "Monsters emit the triple red visual pulses")
-	var red_count := _count_bursts(field_root, pair_monster.visual_color)
-	pair_monster._spawn_visual_burst()
-	check(_count_bursts(field_root, pair_monster.visual_color) - red_count \
-		== int(pair_monster.get("_offsets").size()),
-		"Monster visual bursts stay red without player effects")
+	# 手动发一次：每组只生成 1 个满尺寸外框，位于组中心，不再逐格从内部扩散。
+	_clear_monster_pulses(field_root, pair_monster.visual_color)
+	var red_count := _count_pulses(field_root, pair_monster.visual_color)
+	pair_monster._spawn_visual_pulse()
+	check(_count_pulses(field_root, pair_monster.visual_color) - red_count == 1,
+		"One monster emits exactly one outer-edge pulse, not one per tile")
+	var pair_pulse := _find_pulse(field_root, pair_monster.visual_color)
+	var pair_side: float = pair_monster.visual_side_length()
+	check(pair_pulse != null and pair_pulse.global_position.is_equal_approx(pair_monster.global_position),
+		"Monster pulse is centered on the whole group")
+	check(pair_pulse != null and absf(pair_pulse.side_length - pair_side) < 0.01
+		and absf(pair_side - 56.0) < 0.01,
+		"Two-cell monster pulse spans the group's maximum outer edge (56px)")
+	check(pair_pulse != null and is_zero_approx(pair_pulse.expand_duration)
+		and absf(pair_pulse.current_side - pair_pulse.side_length) < 0.01,
+		"Monster pulse is full size immediately with no inward expansion")
+	check(pair_pulse != null and pair_pulse.get_rect().encloses(pair_monster._bounds()),
+		"Monster pulse encloses the whole hitbox group")
+	check(pair_pulse != null and pair_pulse.never_covered,
+		"Monster pulse is never covered by other fields, even same-colored ones")
+	var single_pulse_side: float = single_a.visual_side_length()
+	check(absf(single_pulse_side - 40.0) < 0.01,
+		"Single-cell monster pulse matches the configured 2.5-cell edge")
 	var hitbox_ok := true
 	for child in pair_monster.get_children():
 		if child is CollisionShape2D and child.shape is RectangleShape2D:
 			if (child.shape as RectangleShape2D).size != Vector2(16, 16):
 				hitbox_ok = false
 	check(hitbox_ok, "Monster hitbox remains one 16x16 shape per cell")
-	for child in field_root.get_children():
-		if child is SoundField and child.level == 0 and not child.safe_for_player \
-				and absf(child.side_length - 48.0) < 0.01:
-			child.queue_free()
+	# 自然闪烁：每个怪同一时刻最多 1 个外框，并且确实会闪。
+	for monster in monsters:
+		monster.visual_cycle_interval = 0.1
+		monster.visual_lifetime = 0.05
+		monster._cycle_elapsed = 0.0
+	_clear_monster_pulses(field_root, pair_monster.visual_color)
+	var max_alive := 0
+	var saw_red := false
+	for _i in range(40):
+		await physics_frame
+		var alive := _count_pulses(field_root, pair_monster.visual_color)
+		max_alive = maxi(max_alive, alive)
+		saw_red = saw_red or alive > 0
+	check(saw_red, "Monsters blink red outer edges over time")
+	check(max_alive <= monsters.size(), "Each monster keeps at most one live outer-edge pulse")
 	for monster in monsters:
 		monster.visual_cycle_interval = 1000.0
-		monster.visual_burst_count = 0
-		monster._burst_left = 0
+		monster.visual_lifetime = 5.0
+		monster._cycle_elapsed = 0.0
+	_clear_monster_pulses(field_root, pair_monster.visual_color)
 	await frames(3)
 	var pair_home: Vector2 = pair_monster.global_position
 	var single_home: Vector2 = single_a.global_position
@@ -172,11 +229,8 @@ func _run() -> void:
 	await frames(8)
 	check(pair_monster.global_position.distance_to(push_start) > 3.0,
 		"Level-1 wave pushes the monster away")
-	var blue_count := _count_bursts(field_root, pair_monster.visual_push_color)
-	pair_monster._spawn_visual_burst()
-	check(_count_bursts(field_root, pair_monster.visual_push_color) - blue_count \
-		== int(pair_monster.get("_offsets").size()),
-		"Knocked-back monster visual bursts turn blue")
+	check(_count_pulses(field_root, pair_monster.visual_push_color) >= 1,
+		"Knocked-back monster flashes a blue outer edge")
 
 	# 7. lv2 波把怪定住（不推走）。
 	level.reset_to_checkpoint()
@@ -192,11 +246,8 @@ func _run() -> void:
 	await frames(30)
 	check(single_a.global_position.distance_to(frozen_star) < 0.5,
 		"Level-2 wave freezes the monster without pushing it")
-	var yellow_count := _count_bursts(field_root, single_a.visual_freeze_color)
-	single_a._spawn_visual_burst()
-	check(_count_bursts(field_root, single_a.visual_freeze_color) - yellow_count \
-		== int(single_a.get("_offsets").size()),
-		"Frozen monster visual bursts turn yellow")
+	check(_count_pulses(field_root, single_a.visual_freeze_color) >= 1,
+		"Frozen monster flashes a yellow outer edge")
 	bait.queue_free()
 	await frames(3)
 
@@ -263,13 +314,30 @@ func _run() -> void:
 	print("\nSpike checks: ", "ALL PASSED" if failures.is_empty() else "%d FAILED" % failures.size())
 	quit(0 if failures.is_empty() else 1)
 
-func _count_bursts(root: Node2D, col: Color) -> int:
+func _is_monster_pulse(field: SoundField, col: Color) -> bool:
+	return not field.is_queued_for_deletion() and field.level == 0 \
+		and not field.safe_for_player and not field.persistent \
+		and is_equal_approx(field.color.r, col.r) \
+		and is_equal_approx(field.color.g, col.g) \
+		and is_equal_approx(field.color.b, col.b)
+
+func _count_pulses(root: Node2D, col: Color) -> int:
 	var count := 0
 	for child in root.get_children():
 		var field := child as SoundField
-		if field != null and field.level == 0 and not field.safe_for_player \
-				and is_equal_approx(field.color.r, col.r) \
-				and is_equal_approx(field.color.g, col.g) \
-				and is_equal_approx(field.color.b, col.b):
+		if field != null and _is_monster_pulse(field, col):
 			count += 1
 	return count
+
+func _find_pulse(root: Node2D, col: Color) -> SoundField:
+	for child in root.get_children():
+		var field := child as SoundField
+		if field != null and _is_monster_pulse(field, col):
+			return field
+	return null
+
+func _clear_monster_pulses(root: Node2D, col: Color) -> void:
+	for child in root.get_children():
+		var field := child as SoundField
+		if field != null and _is_monster_pulse(field, col):
+			field.queue_free()
